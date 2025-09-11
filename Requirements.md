@@ -11,7 +11,7 @@ It covers the **minimum hardware** you need, the **OS/driver stack**, and the **
 | **CPU**   | Quad‑core (Intel i5 / AMD Ryzen 5) or better | Multi‑threaded tokenisation & inference; the script is CPU‑friendly if no GPU |
 | **RAM**   | 16 GB DDR4 (≥ 8 GB is OK for small demos) | Keeps the OS + PyTorch cache in memory |
 | **Storage** | 512 GB SSD (≥ 10 GB free) | Models (~400 MB) + cache + OS |
-| **OS**    | Ubuntu 20.04/22.04 *or* Windows 10/11 (Professional or Enterprise) | The installation scripts below target Ubuntu; Windows is also supported |
+| **OS**    | Ubuntu 20.04/22.04 *or* Windows 10/11 (Professional or Enterprise) | The installation scripts below target Ubuntu; Windows is also supported. For Windows, using WSL2 or Anaconda is recommended for easier CUDA setup. |
 | **Internet** | For the first run (downloads ~400 MB) | After that you can switch to offline mode |
 
 > **Tip:** If your GPU has 8 GB or more you can experiment with larger expert models (e.g., `bert-base-uncased` or even GPT‑Neo). For the demo as written, 4 GB is plenty.
@@ -25,7 +25,7 @@ It covers the **minimum hardware** you need, the **OS/driver stack**, and the **
 | **NVIDIA Driver** | ≥ 535.x (latest) | Enables CUDA and cuDNN |
 | **CUDA Toolkit** | 11.8 (or 12.x if you install the matching PyTorch wheel) | Provides GPU runtime |
 | **cuDNN** | 8.6+ (matches CUDA) | Accelerates convolution & transformer ops |
-| **Python** | 3.10 or 3.11 (recommended) | Latest stable Python releases |
+| **Python** | 3.10, 3.11, or 3.13 (recommended) | Latest stable Python releases |
 | **PyTorch** | 2.1.x + CUDA (or CPU‑only) | Core deep‑learning lib |
 | **Transformers** | 4.36.x (latest) | HuggingFace LLM & tokenizer |
 | **tqdm** | 4.65+ | Progress bars (optional) |
@@ -141,7 +141,7 @@ The script will automatically fall back to CPU (`DEVICE = "cpu"`).
 ```bash
 git clone https://github.com/yourname/cybermoe-demo.git   # or copy the script file into a folder
 cd cybermoe-demo
-# (If you didn’t clone, just create cyber_moe_demo.py and paste the code)
+# (If you didn’t clone, just create CyberMoe.py and paste the code)
 ```
 
 > The demo script already contains `DEVICE = "cuda" if torch.cuda.is_available() else "cpu"` so it will pick GPU automatically.
@@ -151,7 +151,7 @@ cd cybermoe-demo
 ## 9. Run the Demo
 
 ```bash
-python cyber_moe_demo.py      # prints predictions & explanations
+python CyberMoe.py      # prints predictions & explanations
 ```
 
 You should see output similar to:
@@ -191,10 +191,10 @@ RUN python3 -m pip install --upgrade pip && \
     pip install transformers tqdm
 
 # Copy demo
-COPY cyber_moe_demo.py /app/
+COPY CyberMoe.py /app/
 WORKDIR /app
 
-CMD ["python3", "cyber_moe_demo.py"]
+CMD ["python3", "CyberMoe.py"]
 ```
 
 Build & run:
