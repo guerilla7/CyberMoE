@@ -1,0 +1,82 @@
+ron@Rons-MBP-14 CyberMoE % /Users/ron/CyberMoE/.venv/bin/python /Users/ron/CyberMoE/CyberMoe.py
+
+================================================================================
+[0] Input: Suspicious login attempt from unknown IP address
+  -> Predicted label: 1 (prob=0.543)
+  Gating probs: [0.29844174 0.32780942 0.37374887]
+  Top-2 experts: [2, 1] (scores=[0.37374886870384216, 0.3278094232082367])
+    Expert 0 logits: [ 0.41189986 -0.05675085]
+    Expert 1 logits: [-0.53771573 -0.00858109]
+    Expert 2 logits: [0.039952   0.03894831]
+
+--- Explanation of Output ---
+Predicted label: 0 = benign, 1 = malicious
+prob: Model's confidence in the predicted label (higher = more confident)
+Gating probs: Probability assigned to each expert by the gating network (higher = more trusted)
+Top-K experts: Indices of the experts most trusted for this input
+Expert logits: Raw scores from each expert before fusion; higher value for index 1 means more likely malicious
+
+================================================================================
+[1] Input: New vulnerability discovered in Apache HTTP Server
+  -> Predicted label: 1 (prob=0.542)
+  Gating probs: [0.30329323 0.32852677 0.36817998]
+  Top-2 experts: [2, 1] (scores=[0.36817997694015503, 0.3285267651081085])
+    Expert 0 logits: [ 0.31520358 -0.09366927]
+    Expert 1 logits: [-0.5122441  -0.11395735]
+    Expert 2 logits: [0.02404011 0.08239831]
+
+--- Explanation of Output ---
+Predicted label: 0 = benign, 1 = malicious
+prob: Model's confidence in the predicted label (higher = more confident)
+Gating probs: Probability assigned to each expert by the gating network (higher = more trusted)
+Top-K experts: Indices of the experts most trusted for this input
+Expert logits: Raw scores from each expert before fusion; higher value for index 1 means more likely malicious
+
+================================================================================
+[2] Input: Phishing email with malicious attachment detected
+  -> Predicted label: 1 (prob=0.543)
+  Gating probs: [0.3034305  0.3114612  0.38510823]
+  Top-2 experts: [2, 1] (scores=[0.38510823249816895, 0.3114612102508545])
+    Expert 0 logits: [ 0.32126802 -0.05968077]
+    Expert 1 logits: [-0.5101841  -0.04427706]
+    Expert 2 logits: [-0.08205213  0.07853791]
+
+--- Explanation of Output ---
+Predicted label: 0 = benign, 1 = malicious
+prob: Model's confidence in the predicted label (higher = more confident)
+Gating probs: Probability assigned to each expert by the gating network (higher = more trusted)
+Top-K experts: Indices of the experts most trusted for this input
+Expert logits: Raw scores from each expert before fusion; higher value for index 1 means more likely malicious
+
+================================================================================
+[3] Input: Normal user activity: accessing internal portal
+  -> Predicted label: 1 (prob=0.549)
+  Gating probs: [0.29347908 0.33298275 0.37353817]
+  Top-2 experts: [2, 1] (scores=[0.37353816628456116, 0.33298274874687195])
+    Expert 0 logits: [ 0.19776312 -0.03733884]
+    Expert 1 logits: [-0.4112207  -0.01245134]
+    Expert 2 logits: [-0.07387645 -0.18861212]
+
+--- Explanation of Output ---
+Predicted label: 0 = benign, 1 = malicious
+prob: Model's confidence in the predicted label (higher = more confident)
+Gating probs: Probability assigned to each expert by the gating network (higher = more trusted)
+Top-K experts: Indices of the experts most trusted for this input
+Expert logits: Raw scores from each expert before fusion; higher value for index 1 means more likely malicious
+
+================================================================================
+[4] Input: Malware sample shows code injection in system DLL
+  -> Predicted label: 1 (prob=0.544)
+  Gating probs: [0.3033014  0.33180204 0.3648966 ]
+  Top-2 experts: [2, 1] (scores=[0.36489659547805786, 0.33180204033851624])
+    Expert 0 logits: [ 0.2819733  -0.02544738]
+    Expert 1 logits: [-0.6142726  -0.00261105]
+    Expert 2 logits: [0.17899758 0.09255327]
+
+--- Explanation of Output ---
+Predicted label: 0 = benign, 1 = malicious
+prob: Model's confidence in the predicted label (higher = more confident)
+Gating probs: Probability assigned to each expert by the gating network (higher = more trusted)
+Top-K experts: Indices of the experts most trusted for this input
+Expert logits: Raw scores from each expert before fusion; higher value for index 1 means more likely malicious
+ron@Rons-MBP-14 CyberMoE % 

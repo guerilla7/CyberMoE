@@ -201,6 +201,12 @@ def demo():
         # Expert logits
         for j, exp in enumerate(expert_logits[i].cpu().numpy()):
             print(f"    Expert {j} logits: {exp}")
+        print("\n--- Explanation of Output ---")
+        print("Predicted label: 0 = benign, 1 = malicious")
+        print("prob: Model's confidence in the predicted label (higher = more confident)")
+        print("Gating probs: Probability assigned to each expert by the gating network (higher = more trusted)")
+        print("Top-K experts: Indices of the experts most trusted for this input")
+        print("Expert logits: Raw scores from each expert before fusion; higher value for index 1 means more likely malicious")
 
 # --------------------------------------------------------------------------- #
 # 6️⃣ Optional training loop (synthetic data)
@@ -294,5 +300,5 @@ def train_demo():
 # --------------------------------------------------------------------------- #
 if __name__ == "__main__":
     # Choose one of the two options below:
-    # demo()          # fast demo (no training)
-    train_demo()  # run the synthetic training loop
+    demo()          # fast demo (no training)
+    # train_demo()  # run the synthetic training loop
