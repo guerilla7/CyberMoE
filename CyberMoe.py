@@ -2,14 +2,14 @@
 """
 CyberMoE – Minimal Mixture‑of‑Experts for Adaptive Cybersecurity
 
-Author:  <your name>
+Author:  Ron F. Del Rosario
 Date:    2025‑09‑11
 """
 #!/usr/bin/env python3
 """
 CyberMoE – Minimal Mixture-of-Experts for Adaptive Cybersecurity
 
-Author:  <your name>
+Author:  Ron F. Del Rosario
 Date:    2025-09-11
 """
 
