@@ -1,7 +1,7 @@
 # CyberMoE
 A Mixture‑of‑Experts Framework for Adaptive Cybersecurity
 
-> **TL;DR** – CyberMoE is a modular, scalable cybersecurity platform that treats every *expert* as an independently‑trained large language model (LLM) fine‑tuned for a specific threat domain. A lightweight *gating network* routes each incoming data item to the most relevant experts, while a *fusion LLM* aggregates their predictions into a single, explainable decision. The whole system is built for real‑time inference, continual learning, and seamless integration into existing SOC workflows.
+> **TL;DR** – CyberMoE is a modular, scalable cybersecurity platform that treats every *expert* as an independently‑trained large language model (LLM) fine‑tuned for a specific threat domain. A lightweight *gating network* routes each incoming data item to the most relevant experts, while a *fusion LLM* aggregates their predictions into a single, explainable decision. The whole system is built for real‑time inference, continual learning, and seamless integration into existing SOC workflows.  This code is for educational purposes only, I created this to learn how MoE works and how it can benefit cybersecurity use-cases.
 
 ---
 
