@@ -43,7 +43,7 @@ CyberMoE addresses each of these with a *distributed expert* architecture.
 
 ---
 
-### 4. System Architecture
+### 4. Proposed System Architecture
 
 ```
 +---------------------------------------------+
@@ -85,7 +85,7 @@ CyberMoE addresses each of these with a *distributed expert* architecture.
 +---------------------------------------------+
 ```
 
-#### 4.1 Data Ingestion
+#### 4.1 Proposed Data Ingestion
 
 - **Sources** – SIEM logs, NetFlow / sFlow records, EDR telemetry, email headers, threat‑intel feeds (OTX, MISP), CVE databases, raw binaries.
 - **Normalization** – All data is converted into a *canonical representation* (JSON) and passed to the encoder.
@@ -101,7 +101,7 @@ CyberMoE addresses each of these with a *distributed expert* architecture.
 - **Training** – Supervised: minimize cross‑entropy between predicted expert distribution and a *teacher* signal (e.g., domain label).  
 - **Sparse Routing** – At inference, keep only the top‑k experts; set all others to zero.
 
-#### 4.4 Expert Modules
+#### 4.4 Proposed Expert Modules
 
 | Domain | Example Data | Typical Tasks |
 |--------|--------------|---------------|
@@ -189,7 +189,7 @@ Input --> Preprocess --> Encoder --> Gating Net
 
 ---
 
-### 7. Integration & Deployment
+### 7. Proposed Integration & Deployment
 
 | Layer | Deployment Strategy |
 |-------|---------------------|
@@ -201,7 +201,7 @@ Input --> Preprocess --> Encoder --> Gating Net
 
 ---
 
-### 8. Evaluation Plan
+### 8. Porposed Evaluation Plan
 
 | Metric | What it Measures |
 |--------|------------------|
@@ -211,13 +211,13 @@ Input --> Preprocess --> Encoder --> Gating Net
 | **Adaptation Speed** | Time to incorporate a new threat vector (e.g., zero‑day). |
 | **Robustness** | Accuracy under adversarial perturbations. |
 
-- **Datasets** –  
+- **Recommended Datasets** –  
   * CIC‑IDS2017, UNSW‑NB15 for NTE.  
   * VirusShare / Malpedia for MAE.  
   * PhishTank, SpamAssassin for TIE.  
   * CVE‑2024 feed for VPME.
 
-- **Benchmarks** – Compare against monolithic LLM baseline, rule‑based IDS, and other MoE security solutions.
+- **Recommended Benchmarks** – Compare against monolithic LLM baseline, rule‑based IDS, and other MoE security solutions.
 
 ---
 
@@ -233,7 +233,7 @@ Input --> Preprocess --> Encoder --> Gating Net
 
 ---
 
-### 10. Future Extensions
+### 10. Proposed Future Extensions
 
 1. **Graph‑Enhanced Experts** – Integrate graph neural networks (GNNs) to model relationships between indicators of compromise (IOCs).  
 2. **Cross‑Modal Fusion** – Combine textual logs with network flow graphs, or binaries with OS metadata.  
@@ -243,17 +243,6 @@ Input --> Preprocess --> Encoder --> Gating Net
 
 ---
 
-### 11. High‑Level Implementation Roadmap
-
-| Phase | Deliverables |
-|-------|--------------|
-| **0 – 3 mo** | Prototype encoder, gating network; pre‑train domain experts on public datasets. |
-| **4 – 6 mo** | Integrate fusion LLM; build explainability UI; test on live SIEM logs. |
-| **7 – 9 mo** | Deploy in a pilot SOC; collect feedback; refine gating thresholds. |
-| **10 – 12 mo** | Release federated training pipeline; open‑source core components. |
-| **Beyond 12 mo** | Add graph modules, multi‑modal experts; scale to enterprise deployments. |
-
----
 
 ## Conclusion
 
