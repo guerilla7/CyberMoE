@@ -239,4 +239,4 @@ docker run --gpus all cybermoe
 
 ### Final Note
 
-With the above setup, your local workstation will be able to run **CyberMoE** entirely offline, leveraging the GPU for inference. The script is lightweight enough that it can even run on a modest CPU‑only machine, albeit slower. Happy hacking!
+With the above setup, your local workstation will be able to run **CyberMoE** entirely offline, leveraging the GPU for inference. The script is lightweight enough that it can even run on a modest CPU‑only machine, but it will be slower.
