@@ -1,0 +1,59 @@
+﻿pipeline:
+  name: morpheus_prefilter_demo
+  description: GPU streaming prefilter that parses pcap, extracts features, and emits embeddings + suspicion_score
+  stages:
+    - id: pcap_reader
+      type: pcap_reader
+      params:
+        path: ./data/sample.pcap
+        replay_rate: 1000
+    - id: flow_enricher
+      type: zeek_enricher
+      params:
+        enrich_fields:
+          - src_ip
+          - dst_ip
+          - src_port
+          - dst_port
+          - proto
+          - payload_len
+    - id: feature_extractor
+      type: feature_extractor
+      params:
+        flow_features:
+          - byte_histogram
+          - packet_sizes
+          - interarrival_stats
+        text_features:
+          - http_host
+          - user_agent
+    - id: streaming_encoder
+      type: streaming_encoder
+      params:
+        model: demo-encoder-128
+        precision: fp16
+        batch_size: 64
+    - id: suspicion_scorer
+      type: anomaly_scorer
+      params:
+        model: gpu-anom-64
+        threshold: 0.5
+        output_fields:
+          - suspicion_score
+    - id: output_formatter
+      type: json_formatter
+      params:
+        schema:
+          - event_id
+          - ts
+          - source_type: "net"
+          - src_ip
+          - dst_ip
+          - proto
+          - embedding: embedding_array
+          - suspicion_score
+    - id: file_sink
+      type: file_sink
+      params:
+        path: ./data/morpheus_out.jsonl
+        max_batch_size: 1000
