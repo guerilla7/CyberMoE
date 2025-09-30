@@ -1,0 +1,3 @@
+{"id": 1, "event": "Suspicious login attempt from unknown IP address"}
+{"id": 2, "event": "New vulnerability discovered in Apache HTTP Server"}
+{"event_id": "80d475d9-c136-4ce2-b117-6839f30f75c1", "ts": 1759211980744, "source_type": "net", "raw": "net|None->None|proto=None|score=0.000", "embedding": null, "meta": {"src_ip": null, "dst_ip": null, "proto": null, "morpheus_score": 0.0, "raw_source": "morpheus_prefilter_demo"}}\n{"event_id": "258d3a06-29d9-49a0-b6d3-f59b79803263", "ts": 1759211980744, "source_type": "net", "raw": "net|None->None|proto=None|score=0.000", "embedding": null, "meta": {"src_ip": null, "dst_ip": null, "proto": null, "morpheus_score": 0.0, "raw_source": "morpheus_prefilter_demo"}}\n
