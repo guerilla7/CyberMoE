@@ -1,253 +1,69 @@
-# CyberMoE
-A Mixture‑of‑Experts Framework for Adaptive Cybersecurity
+# CyberMoE: A Minimal Mixture-of-Experts Demonstration
 
-[![DeepWiki](https://img.shields.io/badge/DeepWiki-guerilla7%2FCyberMoE-blue.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCcr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==)](https://deepwiki.com/guerilla7/CyberMoE)
+This project provides a minimal, educational implementation of a sparse **Mixture-of-Experts (MoE)** model. It is designed to demonstrate the core concepts of MoE within a cybersecurity context, showing how different "expert" models can be used to classify security-related text.
 
+The script uses a shared `distilbert-base-uncased` encoder and a gating network to route inputs to a selection of specialized experts, demonstrating the principles of specialization, explainability, and efficiency.
 
+## Core Concepts Demonstrated
 
-> **TL;DR** – CyberMoE is a modular, scalable cybersecurity platform that treats every *expert* as an independently‑trained large language model (LLM) fine‑tuned for a specific threat domain. A lightweight *gating network* routes each incoming data item to the most relevant experts, while a *fusion LLM* aggregates their predictions into a single, explainable decision. The whole system is built for real‑time inference, continual learning, and seamless integration into existing SOC workflows.  This code is for educational purposes only, I created this to learn how MoE works and how it can benefit cybersecurity use-cases.
+This script is a hands-on demonstration of a modern MoE architecture:
 
----
+1.  **Shared Encoder**: A single `distilbert-base-uncased` model from HuggingFace processes the input text into numerical representations.
+2.  **Specialized Experts**: Three simple neural networks act as classifiers for three distinct (simulated) domains: "Network", "Malware", and "Phishing".
+3.  **Gating Network**: A small network that analyzes the encoded text and assigns a relevance score to each expert.
+4.  **Sparse Routing (Top-K)**: To demonstrate efficiency, the model only **activates the Top-K (K=2)** most relevant experts for any given input. The output of the non-selected expert is skipped entirely, saving computation.
 
-### 1. Executive Summary
+## How It Works
 
-- **Goal** – Leverage the expressive power of modern LLMs while keeping inference tractable and results explainable.
-- **Core idea** – Use a *Mixture‑of‑Experts* (MoE) architecture where each expert is an LLM that has mastered a particular cybersecurity sub‑domain (e.g., network traffic, malware binaries, phishing emails, vulnerability databases).
-- **Key benefits** –  
-  * **Scalability:** Add or retire experts without retraining the whole model.  
-  * **Efficiency:** Only a handful of experts are activated per request (sparse routing).  
-  * **Explainability:** Gating probabilities + expert confidence scores reveal *why* a decision was made.  
-  * **Adaptivity:** Experts can be fine‑tuned on fresh data, and a meta‑expert can learn to combine expert outputs over time.
+The script's main function, `train_demo()`, performs two phases:
 
----
+1.  **Synthetic Training**: First, it trains the MoE model on a "themed" synthetic dataset. It generates sentences with specific keywords (e.g., "IP address," "malware," "email") to teach the gating network how to route different types of inputs to the correct expert.
+2.  **Inference**: After the brief training phase, it runs inference on a sample of five security-themed sentences. The output clearly shows the model's final prediction, the gating network's routing decisions, and which experts were sparsely activated.
 
-### 2. Problem Space
+## Setup
 
-Traditional security analytics pipelines are monolithic, often relying on handcrafted rules or flat machine‑learning models that struggle to keep pace with the volume and variety of cyber data. They also lack:
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/your-username/CyberMoE.git
+    cd CyberMoE
+    ```
+2.  **Install dependencies:**
+    This project uses a standard `requirements.txt` file.
+    ```bash
+    pip install -r requirements.txt
+    ```
+    *(For a more detailed guide on setting up the environment, including specific CUDA/GPU drivers, see `SETUP_GUIDE.md`.)*
 
-| Limitation | Example |
-|------------|---------|
-| **Monolithic training** | A single model must learn all threat vectors, forcing a trade‑off between breadth and depth. |
-| **Computational bottleneck** | Full‑scale LLM inference on every log, packet, or email is infeasible. |
-| **Opaque reasoning** | Black‑box outputs make SOC analysts hesitant to act on them. |
+## How to Run
 
-CyberMoE addresses each of these with a *distributed expert* architecture.
+Simply run the `CyberMoe.py` script from your terminal:
 
----
-
-### 3. Core Concepts
-
-| Concept | Definition |
-|---------|------------|
-| **Expert LLM** | A small transformer (≈ 200–500 M parameters) fine‑tuned on a domain‑specific corpus. |
-| **Gating Network** | A lightweight (≈ 5–10 M parameters) neural network that takes an input embedding and outputs a probability distribution over experts. |
-| **Sparse Activation** | Only the top‑k experts (typically k = 2–4) are invoked per input. |
-| **Fusion LLM** | A 10‑M parameter transformer that ingests the concatenated expert outputs and produces a final verdict (e.g., threat score, playbook). |
-| **Meta‑Expert** | An optional higher‑level LLM that learns to *re‑weight* expert contributions based on context (e.g., past SOC decisions). |
-
----
-
-### 4. Proposed System Architecture
-
-```
-+---------------------------------------------+
-|               CyberMoE Platform             |
-|                                             |
-|  +-----------------+   +---------------+    |
-|  | Data Ingestion  |-->| Pre‑processor |    |
-|  +-----------------+   +---------------+    |
-|         |                        |          |
-|         v                        v          |
-|  +-----------------+   +---------------+    |
-|  | Feature Encoder |<--| Embedding Net |    |
-|  +-----------------+   +---------------+    |
-|         |                        |          |
-|         v                        v          |
-|  +-----------------+   +---------------+    |
-|  |   Gating Net    |-->| Expert Router |    |
-|  +-----------------+   +---------------+    |
-|         |                        |          |
-|         v                        v          |
-|  +-----------------+   +---------------+    |
-|  |   Experts (N)   |<--| Sparse Invoc. |    |
-|  +-----------------+   +---------------+    |
-|         |                        |          |
-|         v                        v          |
-|  +-----------------+   +---------------+    |
-|  | Fusion LLM      |<--| Aggregator    |    |
-|  +-----------------+   +---------------+    |
-|         |                        |          |
-|         v                        v          |
-|  +-----------------+   +---------------+    |
-|  | Explainability  |<--| Explanations  |    |
-|  +-----------------+   +---------------+    |
-|         |                        |          |
-|         v                        v          |
-|  +-----------------+   +---------------+    |
-|  | SOC / SIEM API  |<--| Output/Act.   |    |
-|  +-----------------+   +---------------+    |
-+---------------------------------------------+
+```bash
+python CyberMoe.py
 ```
 
-#### 4.1 Proposed Data Ingestion
+By default, this executes the `train_demo()` function, which trains the model and shows the final predictions. This is the recommended way to see the model in action.
 
-- **Sources** – SIEM logs, NetFlow / sFlow records, EDR telemetry, email headers, threat‑intel feeds (OTX, MISP), CVE databases, raw binaries.
-- **Normalization** – All data is converted into a *canonical representation* (JSON) and passed to the encoder.
+## Interpreting the Output
 
-#### 4.2 Feature Encoder
+After running the script, you will see the training progress followed by the final inference results. Here is a sample output for one of the inputs and an explanation of each part.
 
-- **Embedding** – A transformer‑based encoder (e.g., DistilBERT) that produces a 768‑dim vector per input.  
-- **Optional multimodal** – For binaries, use a dual‑encoder (text + byte‑level) to capture both metadata and payload.
-
-#### 4.3 Gating Network
-
-- **Architecture** – Multi‑layer perceptron (MLP) with softmax output over *E* experts.  
-- **Training** – Supervised: minimize cross‑entropy between predicted expert distribution and a *teacher* signal (e.g., domain label).  
-- **Sparse Routing** – At inference, keep only the top‑k experts; set all others to zero.
-
-#### 4.4 Proposed Expert Modules
-
-| Domain | Example Data | Typical Tasks |
-|--------|--------------|---------------|
-| **Network Traffic** (NTE) | NetFlow, Zeek logs | Anomaly detection, protocol fingerprinting |
-| **Endpoint Behavior** (EBE) | Process lists, file system events | Insider threat detection |
-| **Malware Analysis** (MAE) | PE headers, malware samples | Static/dynamic feature extraction |
-| **Phishing / Email** (TIE) | Message headers, URLs | Spam filtering, credential harvesting detection |
-| **Vulnerability & Patch** (VPME) | CVE feeds, OS packages | Risk scoring, patch prioritization |
-| **Incident Response** (IRDE) | SOC playbooks, ticketing | Automated response suggestions |
-
-- **Expert LLM** – Each is a lightweight transformer fine‑tuned on millions of labeled examples from its domain.  
-- **Knowledge Base** – Each expert has access to a *domain‑specific knowledge graph* (e.g., known CVE–CPE relationships) via a key‑value store.
-
-#### 4.5 Fusion LLM
-
-- **Input** – Concatenated expert outputs (softmax scores, embeddings).  
-- **Task** – Multi‑label classification: threat severity, recommended action, confidence.  
-- **Explainability** – Outputs the gating probabilities and each expert’s *contribution weight*.
-
-#### 4.6 Explainability Module
-
-- **Explainable Heatmaps** – Visualize which tokens in the input influenced each expert.  
-- **Expert Confidence** – Log the top‑k experts and their certainty scores.  
-- **Audit Trail** – Store gating decisions, expert outputs, fusion output in a tamper‑proof ledger (e.g., WORM storage).
-
-#### 4.7 SOC / SIEM API
-
-- **REST/GraphQL** – Provide endpoints for real‑time alerts, batch scans, and playbook generation.  
-- **Webhook** – Push findings to ticketing systems (Jira, ServiceNow).  
-
----
-
-### 5. Training & Fine‑Tuning
-
-#### 5.1 Multi‑Task, Multi‑Expert Joint Training
-
-- **Objective** – Optimize *both* the gating network and all experts jointly:
-  \[
-  L = \sum_{i=1}^{N} w_i \cdot L_{\text{expert}_i} + \lambda \cdot L_{\text{gate}}
-  \]
-  where \(w_i\) are the gating probabilities for input *i*.
-
-- **Teacher‑Forcing** – Use a small “oracle” network that knows the true domain label to supervise gating initially, then let the gating learn from expert performance.
-
-#### 5.2 Knowledge Distillation
-
-- **Shared Backbone** – All experts share a small *shared encoder* that learns universal representations.  
-- **Distillation Loss** – Encourage experts to mimic each other on *non‑domain* samples, improving generalization.
-
-#### 5.3 Continual Learning Pipeline
-
-- **Data Ingestion** – New logs, threat feeds are queued for nightly retraining.  
-- **Fine‑Tuning** – Each expert is updated on its domain data only, preserving other experts’ knowledge.  
-- **Catastrophic Forgetting Mitigation** – Elastic Weight Consolidation (EWC) on shared layers.
-
-#### 5.4 Adversarial Robustness
-
-- **Adversarial Training** – Generate perturbed inputs (e.g., obfuscated binaries) and train experts to remain stable.  
-- **Poisoning Defense** – Monitor gating entropy; high variance may indicate a poisoned input.
-
----
-
-### 6. Inference Flow (Real‑Time)
-
-```
-Input --> Preprocess --> Encoder --> Gating Net
-   |
-   |--> Top‑k experts selected (sparse routing)
-        |
-        v
-  Expert outputs (scores, embeddings)
-        |
-        v
-  Fusion LLM aggregates --> Final verdict + Playbook
-        |
-        v
-  Explainability Module (gating probs, heatmaps)
-        |
-        v
-  SOC API / SIEM alert
+```text
+================================================================================
+[3] Input: Normal user activity: accessing internal portal
+  -> Predicted label: 0 (prob=1.000)
+  Gating probs: Network=0.90, Malware=0.05, Phishing=0.05
+  Top-2 experts: ['Network', 'Phishing'] (scores=[0.8960..., 0.0532...])
+  Expert Logits (shows sparse activation):
+    Expert 0 (Network) logits: [ 5.236638  -4.4157934] <-- ACTIVATED
+    Expert 1 (Malware) logits: [0. 0.] <-- SKIPPED
+    Expert 2 (Phishing) logits: [ 0.45459735 -0.10165542] <-- ACTIVATED
+================================================================================
 ```
 
-- **Latency** – < 200 ms per log entry on a single GPU; only the active experts consume compute.  
-- **Throughput** – 10k+ logs per second on a modest GPU cluster, thanks to sparse routing.
-
----
-
-### 7. Proposed Integration & Deployment
-
-| Layer | Deployment Strategy |
-|-------|---------------------|
-| **Experts** | Docker containers, each running a *micro‑service* that exposes an inference endpoint. |
-| **Gating + Fusion** | Kubernetes pod orchestrated by a lightweight controller that routes requests. |
-| **Explainability & Logging** | Centralized logging (ELK stack) + immutable audit log. |
-| **Security of the Model** | Deploy inside a Trusted Execution Environment (TEE) or secure enclave; encrypt model weights. |
-| **Data Privacy** | Use *federated* training for cross‑org experts; only share gradients or embeddings, not raw logs. |
-
----
-
-### 8. Porposed Evaluation Plan
-
-| Metric | What it Measures |
-|--------|------------------|
-| **Detection Accuracy** (TPR/FPR) | Classic classification metrics per domain. |
-| **Latency & Throughput** | Real‑time performance under load. |
-| **Explainability Score** | Human‑subjective rating of gating clarity and heatmap usefulness. |
-| **Adaptation Speed** | Time to incorporate a new threat vector (e.g., zero‑day). |
-| **Robustness** | Accuracy under adversarial perturbations. |
-
-- **Recommended Datasets** –  
-  * CIC‑IDS2017, UNSW‑NB15 for NTE.  
-  * VirusShare / Malpedia for MAE.  
-  * PhishTank, SpamAssassin for TIE.  
-  * CVE‑2024 feed for VPME.
-
-- **Recommended Benchmarks** – Compare against monolithic LLM baseline, rule‑based IDS, and other MoE security solutions.
-
----
-
-### 9. Novelty & Competitive Edge
-
-| Feature | Why It’s New |
-|---------|--------------|
-| **Domain‑Specific Expert LLMs** | Unlike generic security models, each expert is a *fully fine‑tuned* LLM on its niche. |
-| **Sparse MoE Routing** | Only a few experts are invoked per input, reducing compute while keeping accuracy. |
-| **Meta‑Fusion LLM** | Learns to *re‑weight* expert outputs, adapting to changing threat landscapes. |
-| **Explainable Gate** | Provides transparent routing decisions that SOC analysts can audit. |
-| **Federated MoE** | Enables multi‑org collaboration without exposing raw logs. |
-
----
-
-### 10. Proposed Future Extensions
-
-1. **Graph‑Enhanced Experts** – Integrate graph neural networks (GNNs) to model relationships between indicators of compromise (IOCs).  
-2. **Cross‑Modal Fusion** – Combine textual logs with network flow graphs, or binaries with OS metadata.  
-3. **Policy‑Driven Routing** – Let SOC managers set *policy constraints* (e.g., prioritize EBE for high‑value endpoints).  
-4. **Auto‑Scaling Expert Pools** – Dynamically spin up additional expert replicas during peak threat periods.  
-5. **Open‑Source Release** – Provide a reference implementation and pre‑trained experts for community contribution.
-
----
-
-
-## Conclusion
-
-CyberMoE brings the power of large language models to cybersecurity in a *structured, modular*, and *efficient* way. By treating each threat domain as an expert LLM and routing inputs via a lightweight gating network, the framework delivers high‑accuracy detections with low latency while keeping explanations transparent. Its architecture is inherently extensible—new experts can be added as threats evolve, and the system can learn to re‑weight expert contributions over time. CyberMoE is thus positioned as a next‑generation, AI‑driven security platform ready for the fast‑moving cyber threat landscape.
+- **`Predicted label`**: The final classification. `0` is benign, `1` is malicious. Here, the model correctly identified the activity as benign with 100% probability.
+- **`Gating probs`**: The initial scores assigned by the gating network to each expert. Here, it gave a 90% score to the "Network" expert.
+- **`Top-2 experts`**: The experts that were selected for activation based on the gating scores.
+- **`Expert Logits (shows sparse activation)`**: This is the most important part for understanding the MoE's efficiency.
+    - `ACTIVATED`: The model computed the output for the "Network" and "Phishing" experts. You can see their raw output scores (logits).
+    - `SKIPPED`: The "Malware" expert was deemed irrelevant by the gating network, so its logits are `[0. 0.]`, meaning it was **not computed**. This demonstrates the computational savings of sparse MoE models.

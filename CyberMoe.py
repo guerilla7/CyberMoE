@@ -67,39 +67,18 @@ class GatingNetwork(nn.Module):
         return torch.softmax(logits, dim=-1)
 
 # --------------------------------------------------------------------------- #
-# 3️⃣ Fusion Network – aggregates weighted expert outputs
-# --------------------------------------------------------------------------- #
-class FusionNetwork(nn.Module):
-    """
-    Takes the weighted logits from all experts and produces a final decision.
-    """
-    def __init__(self, num_experts: int = NUM_EXPERTS,
-                 expert_labels: int = EXPERT_LABELS):
-        super().__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(num_experts * expert_labels, 128),
-            nn.ReLU(),
-            nn.Linear(128, expert_labels)
-        )
-
-    def forward(self, weighted_logits: torch.Tensor) -> torch.Tensor:
-        """
-        :param weighted_logits: (batch, num_experts, expert_labels)
-        :return: final logits of shape (batch, expert_labels)
-        """
-        flat = weighted_logits.view(weighted_logits.size(0), -1)  # flatten
-        return self.mlp(flat)
-
-# --------------------------------------------------------------------------- #
-# 4️⃣ CyberMoE – the full model
+# 3️⃣ CyberMoE – the full model (now with sparse Top-K routing)
 # --------------------------------------------------------------------------- #
 class CyberMoE(nn.Module):
     """
     A minimal Mixture‑of‑Experts cybersecurity model.
+    This version uses sparse Top-K routing for efficiency.
     """
     def __init__(self, num_experts: int = NUM_EXPERTS,
-                 expert_labels: int = EXPERT_LABELS):
+                 expert_labels: int = EXPERT_LABELS,
+                 top_k: int = TOP_K):
         super().__init__()
+        self.top_k = top_k
 
         # Shared encoder & tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
@@ -112,7 +91,7 @@ class CyberMoE(nn.Module):
         self.experts    = nn.ModuleList(
             [Expert(hidden_size, expert_labels) for _ in range(num_experts)]
         )
-        self.fusion_net = FusionNetwork(num_experts, expert_labels)
+        # The FusionNetwork has been removed for a sparse implementation
 
     # ----------------------------------------------------------------------- #
     def forward(self, texts: list[str]) -> tuple[torch.Tensor,
@@ -122,39 +101,58 @@ class CyberMoE(nn.Module):
         :param texts: list of raw strings (batch)
         :return:
             final_logits  – (batch, expert_labels)   -> final decision
-            gating_probs  – (batch, num_experts)     -> why we routed to experts
-            expert_logits – (batch, num_experts, expert_labels)
+            gating_probs  – (batch, num_experts)     -> raw gating probabilities
+            expert_logits – (batch, num_experts, expert_labels) -> (sparse) logits from experts
         """
         # Tokenisation
         inputs = self.tokenizer(
-            texts,
-            padding=True,
-            truncation=True,
-            return_tensors="pt",
+            texts, padding=True, truncation=True, return_tensors="pt"
         ).to(DEVICE)
 
         # Shared encoder
-        outputs = self.encoder(
-            input_ids=inputs["input_ids"],
-            attention_mask=inputs["attention_mask"],
-        )
-        hidden_state = outputs.last_hidden_state  # (batch, seq_len, hidden_size)
+        hidden_state = self.encoder(
+            input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"]
+        ).last_hidden_state
 
-        # Gating probabilities
+        # Gating: get probabilities for all experts
         gating_probs = self.gating_net(hidden_state)  # (batch, num_experts)
 
-        # Experts produce logits
-        expert_logits = []
-        for expert in self.experts:
-            logits = expert(hidden_state)          # (batch, expert_labels)
-            expert_logits.append(logits.unsqueeze(1))  # add expert dim
-        expert_logits = torch.cat(expert_logits, dim=1)   # (batch, num_experts, expert_labels)
+        # Routing: select Top-K experts and their probabilities
+        top_k_probs, top_k_indices = torch.topk(gating_probs, self.top_k, dim=-1)
 
-        # Weight by gating probabilities
-        weighted_logits = expert_logits * gating_probs.unsqueeze(-1)  # broadcast
+        # Normalize the probabilities of the top-k experts, so they sum to 1
+        top_k_probs = top_k_probs / torch.sum(top_k_probs, dim=-1, keepdim=True)
 
-        # Fusion to final decision
-        final_logits = self.fusion_net(weighted_logits)  # (batch, expert_labels)
+        # Initialize tensors to store results
+        batch_size, _, hidden_size = hidden_state.shape
+        final_logits = torch.zeros(batch_size, EXPERT_LABELS).to(DEVICE)
+        # expert_logits is kept to show which experts were activated (it's sparse)
+        expert_logits = torch.zeros(batch_size, NUM_EXPERTS, EXPERT_LABELS).to(DEVICE)
+
+        # Loop over batch items for sparse computation (clearer for demo)
+        for i in range(batch_size):
+            item_hidden_state = hidden_state[i:i+1]
+            
+            # Get the outputs from the top-k experts for this item
+            top_k_expert_outputs = []
+            for j in range(self.top_k):
+                expert_idx = top_k_indices[i, j]
+                expert = self.experts[expert_idx]
+                
+                # Compute and store expert output
+                logit = expert(item_hidden_state)
+                top_k_expert_outputs.append(logit)
+                expert_logits[i, expert_idx] = logit.squeeze(0)
+
+            # Stack the expert outputs for this item
+            item_top_k_logits = torch.cat(top_k_expert_outputs, dim=0) # (top_k, expert_labels)
+
+            # Weight the outputs by the normalized gating probabilities
+            item_final_logit = torch.sum(
+                item_top_k_logits * top_k_probs[i].unsqueeze(-1), dim=0
+            )
+            
+            final_logits[i] = item_final_logit
 
         return final_logits, gating_probs, expert_logits
 
@@ -165,6 +163,9 @@ def demo():
     # Instantiate model
     model = CyberMoE().to(DEVICE)
     model.eval()  # inference mode
+
+    # Expert names for clearer output
+    expert_names = ["Network", "Malware", "Phishing"]
 
     # Example inputs (feel free to add your own)
     texts = [
@@ -192,21 +193,23 @@ def demo():
 
         # Gating probabilities
         gate = gating_probs[i].cpu().numpy()
-        print(f"  Gating probs: {gate}")
+        print(f"  Gating probs: " + ", ".join([f"{name}={prob:.2f}" for name, prob in zip(expert_names, gate)]))
 
         # Top‑k experts (for explanation)
         topk_vals, topk_idx = torch.topk(gating_probs[i], TOP_K)
-        print(f"  Top-{TOP_K} experts: {topk_idx.tolist()} (scores={topk_vals.numpy().tolist()})")
+        topk_names = [expert_names[idx] for idx in topk_idx]
+        print(f"  Top-{TOP_K} experts: {topk_names} (scores={topk_vals.numpy().tolist()})")
 
         # Expert logits
         for j, exp in enumerate(expert_logits[i].cpu().numpy()):
-            print(f"    Expert {j} logits: {exp}")
+            print(f"    Expert {j} ({expert_names[j]}) logits: {exp}")
         print("\n--- Explanation of Output ---")
         print("Predicted label: 0 = benign, 1 = malicious")
         print("prob: Model's confidence in the predicted label (higher = more confident)")
         print("Gating probs: Probability assigned to each expert by the gating network (higher = more trusted)")
         print("Top-K experts: Indices of the experts most trusted for this input")
         print("Expert logits: Raw scores from each expert before fusion; higher value for index 1 means more likely malicious")
+
 
 # --------------------------------------------------------------------------- #
 # 6️⃣ Optional training loop (synthetic data)
@@ -218,12 +221,30 @@ def train_demo():
     phishing emails, etc.  Each domain expert should be fine‑tuned
     on its own data first.
     """
-    # Simple synthetic dataset
+    import random
+
+    # More realistic synthetic dataset with themed keywords
     class DummyDataset(torch.utils.data.Dataset):
         def __init__(self, num_samples=2000):
-            self.texts = [f"sample {i}" for i in range(num_samples)]
-            # Random labels 0/1
-            self.labels = torch.randint(0, EXPERT_LABELS, (num_samples,))
+            self.texts = []
+            self.labels = []
+
+            themes = {
+                "Network": ["IP address", "firewall", "login attempt", "traffic", "port scan"],
+                "Malware": ["malware", "trojan", "virus", "injection", "system DLL", "exploit"],
+                "Phishing": ["phishing", "email", "attachment", "invoice", "password", "account"],
+                "Benign": ["user activity", "internal portal", "accessing file", "normal operation", "scheduled task"]
+            }
+
+            for _ in range(num_samples):
+                theme_name = random.choice(list(themes.keys()))
+                keyword1 = random.choice(themes[theme_name])
+                keyword2 = random.choice(themes[theme_name])
+                
+                self.texts.append(f"Log entry: detected {keyword1} and {keyword2}.")
+                
+                label = 1 if theme_name != "Benign" else 0
+                self.labels.append(label)
 
         def __len__(self):
             return len(self.texts)
@@ -234,7 +255,7 @@ def train_demo():
     # Collate function that returns a list of strings and a tensor of labels
     def collate_fn(batch):
         texts, labels = zip(*batch)
-        return list(texts), torch.tensor(labels)
+        return list(texts), torch.tensor(labels, dtype=torch.long)
 
     dataset = DummyDataset()
     loader   = torch.utils.data.DataLoader(
@@ -248,6 +269,7 @@ def train_demo():
 
     # Training loop (few epochs for demo)
     from sklearn.metrics import accuracy_score, confusion_matrix
+    print("--- Starting synthetic training ---")
     model.train()
     for epoch in range(3):
         total_loss = 0.0
@@ -272,8 +294,9 @@ def train_demo():
 
     # After training, run the demo inference again
     print("\n--- Post‑training inference ---")
-    # Evaluate on demo inputs
+    
     model.eval()
+    expert_names = ["Network", "Malware", "Phishing"]
     texts = [
         "Suspicious login attempt from unknown IP address",
         "New vulnerability discovered in Apache HTTP Server",
@@ -281,24 +304,53 @@ def train_demo():
         "Normal user activity: accessing internal portal",
         "Malware sample shows code injection in system DLL"
     ]
+    
     with torch.no_grad():
         final_logits, gating_probs, expert_logits = model(texts)
+
     probs = torch.softmax(final_logits, dim=-1).cpu().numpy()
-    preds = [int(p.argmax()) for p in probs]
-    print("Demo input predictions:")
+
+    print("Demo input predictions after training:")
     for i, text in enumerate(texts):
-        print(f"[{i}] {text} -> Predicted label: {preds[i]} (prob={probs[i][preds[i]]:.3f})")
-    # Print confusion matrix for demo inputs (assuming true labels: [1,1,1,0,1] for illustration)
-    true_demo_labels = [1,1,1,0,1]
-    demo_acc = accuracy_score(true_demo_labels, preds)
-    demo_cm = confusion_matrix(true_demo_labels, preds)
-    print(f"Demo Accuracy: {demo_acc:.4f}")
-    print(f"Demo Confusion Matrix:\n{demo_cm}")
+        print("\n" + "=" * 80)
+        print(f"[{i}] Input: {text}")
+        pred = int(probs[i].argmax())
+        print(f"  -> Predicted label: {pred} (prob={probs[i][pred]:.3f})")
+        gate = gating_probs[i].cpu().numpy()
+        print(f"  Gating probs: " + ", ".join([f"{name}={prob:.2f}" for name, prob in zip(expert_names, gate)]))
+        topk_vals, topk_idx = torch.topk(gating_probs[i], TOP_K)
+        topk_names = [expert_names[idx] for idx in topk_idx]
+        print(f"  Top-{TOP_K} experts: {topk_names} (scores={topk_vals.numpy().tolist()})")
+
+        # Also print the sparse expert logits to show which were used
+        print("  Expert Logits (shows sparse activation):")
+        for j, exp_logit in enumerate(expert_logits[i].cpu().numpy()):
+            if exp_logit.any(): # Check if the expert was used
+                print(f"    Expert {j} ({expert_names[j]}) logits: {exp_logit} <-- ACTIVATED")
+            else:
+                print(f"    Expert {j} ({expert_names[j]}) logits: {exp_logit} <-- SKIPPED")
+
+    # Illustrative confusion matrix for the demo inputs
+    true_demo_labels = [1, 1, 1, 0, 1] # Malicious, Malicious, Phishing, Benign, Malware
+    final_preds = [int(p.argmax()) for p in probs]
+    demo_acc = accuracy_score(true_demo_labels, final_preds)
+    demo_cm = confusion_matrix(true_demo_labels, final_preds)
+    print("\n" + "=" * 80)
+    print(f"Accuracy on demo sentences: {demo_acc:.4f}")
+    print(f"Confusion Matrix on demo sentences:\n{demo_cm}")
+
 
 # --------------------------------------------------------------------------- #
 # 7️⃣ Entry point
 # --------------------------------------------------------------------------- #
 if __name__ == "__main__":
-    # Choose one of the two options below:
-    demo()          # fast demo (no training)
-    # train_demo()  # run the synthetic training loop
+    # --- Choose one of the two options below ---
+
+    # 1. Run a quick inference demo with an UNTRAINED model.
+    #    Shows the architecture but predictions will be random.
+    # demo()
+
+    # 2. Run the synthetic TRAINING and inference demo.
+    #    This trains the model on themed data, so its predictions are more realistic.
+    #    This is the recommended way to see the model in action.
+    train_demo()
