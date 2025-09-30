@@ -22,19 +22,21 @@ It covers the **minimum hardware** you need, the **OS/driver stack**, and the **
 
 | Layer | Tool / Version | Why |
 |-------|----------------|-----|
-| **NVIDIA Driver** | ≥ 535.x (latest) | Enables CUDA and cuDNN |
-| **CUDA Toolkit** | 11.8 (or 12.x if you install the matching PyTorch wheel) | Provides GPU runtime |
-| **cuDNN** | 8.6+ (matches CUDA) | Accelerates convolution & transformer ops |
+| **NVIDIA Driver** | latest | Enables CUDA and cuDNN |
+| **CUDA Toolkit** | latest | Provides GPU runtime |
+| **cuDNN** | latest | Accelerates convolution & transformer ops |
 | **Python** | 3.10, 3.11, or 3.13 (recommended) | Latest stable Python releases |
-| **PyTorch** | 2.1.x + CUDA (or CPU‑only) | Core deep‑learning lib |
-| **Transformers** | 4.36.x (latest) | HuggingFace LLM & tokenizer |
-| **tqdm** | 4.65+ | Progress bars (optional) |
+| **PyTorch** | latest | Core deep‑learning lib |
+| **Transformers** | latest | HuggingFace LLM & tokenizer |
+| **scikit-learn** | latest | For model training metrics |
 
 > All versions are *current* at the time of writing (2025‑09). The exact wheel you install will match your CUDA version.
 
 ---
 
-## 3. Install NVIDIA Driver, CUDA & cuDNN (Ubuntu)
+## 3. GPU and Accelerator Setup
+
+> **macOS Users:** For Apple Silicon (M1/M2/M3) devices, PyTorch uses the Metal Performance Shaders (MPS) backend for GPU acceleration. No separate CUDA installation is needed. Simply installing PyTorch (`pip install torch`) is sufficient. The script will default to CPU if MPS is not available.
 
 > If you already have a working driver + CUDA combo that satisfies the above, skip this section.
 
@@ -116,7 +118,7 @@ If `torch.cuda.is_available()` prints `True`, you’re good.
 ## 6. Install Transformers & Dependencies
 
 ```bash
-pip install transformers tqdm
+pip install transformers scikit-learn
 ```
 
 > This pulls in the `tokenizers` library automatically.
@@ -129,20 +131,16 @@ If you don’t have a compatible GPU, install the CPU wheels:
 
 ```bash
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-pip install transformers tqdm
+pip install transformers scikit-learn
 ```
 
 The script will automatically fall back to CPU (`DEVICE = "cpu"`).
 
 ---
 
-## 8. Clone / Copy the Demo Script
+## 8. Copy the Demo Script
 
-```bash
-git clone https://github.com/yourname/cybermoe-demo.git   # or copy the script file into a folder
-cd cybermoe-demo
-# (If you didn’t clone, just create CyberMoe.py and paste the code)
-```
+Create the `CyberMoe.py` and paste the code.
 
 > The demo script already contains `DEVICE = "cuda" if torch.cuda.is_available() else "cpu"` so it will pick GPU automatically.
 
@@ -188,7 +186,7 @@ RUN apt-get update && \
 RUN python3 -m pip install --upgrade pip && \
     pip install torch torchvision torchaudio \
         --index-url https://download.pytorch.org/whl/cu118 && \
-    pip install transformers tqdm
+    pip install transformers scikit-learn
 
 # Copy demo
 COPY CyberMoe.py /app/
@@ -227,11 +225,12 @@ docker run --gpus all cybermoe
 
 | ✔ | Item |
 |---|------|
-| ✅ | NVIDIA driver ≥ 535.x |
-| ✅ | CUDA Toolkit 11.8 + cuDNN 8.6 |
+| ✅ | NVIDIA driver (latest) |
+| ✅ | CUDA Toolkit + cuDNN (latest) |
 | ✅ | Python 3.10+ in a virtual env |
-| ✅ | PyTorch 2.1.x + CUDA (or CPU) |
-| ✅ | Transformers 4.36+ |
+| ✅ | PyTorch (latest) |
+| ✅ | Transformers (latest) |
+| ✅ | scikit-learn (latest) |
 | ✅ | Enough VRAM (≥ 4 GB for DistilBERT) |
 | ✅ | Internet at least once for model download |
 
