@@ -1,0 +1,29 @@
+﻿version: "3.8"
+services:
+  cybermoe:
+    image: python:3.10-slim
+    container_name: cybermoe
+    build: .
+    volumes:
+      - ./:/app
+      - ./data:/app/data
+      - ${TRANSFORMERS_CACHE:-~/.cache/huggingface}/transformers:/root/.cache/huggingface/transformers
+    working_dir: /app
+    environment:
+      - CYBERMOE_BACKBONE=${CYBERMOE_BACKBONE:-distilbert-base-uncased}
+      - CYBERMOE_TOP_K=${CYBERMOE_TOP_K:-2}
+    command: ["bash", "-lc", "python3 consumer_morpheus_to_cybermoe.py && python3 CyberMoe.py --demo"]
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    profiles: ["cpu","gpu"]
+
+  morpheus-prefilter:
+    image: nvidia/morpheus:demo
+    container_name: morpheus_prefilter
+    volumes:
+      - ./data:/data
+      - ./morpheus_pipeline.yaml:/app/morpheus_pipeline.yaml
+    command: ["bash", "-lc", "morpheus-run /app/morpheus_pipeline.yaml"]
+    profiles: ["gpu"]
