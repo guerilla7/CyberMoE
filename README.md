@@ -1,19 +1,3 @@
-## Data Files Required for Testing
-
-Some scripts (such as `consumer_morpheus_to_cybermoe.py` and `smoke_test.py`) require input and output data files in the `data/` directory:
-
-- `data/cybermoe_input.jsonl`: Input events for smoke tests. Example content:
-    ```jsonl
-    {"id": 1, "event": "Suspicious login attempt from unknown IP address"}
-    {"id": 2, "event": "New vulnerability discovered in Apache HTTP Server"}
-    ```
-- `data/morpheus_out.jsonl`: Output results for the consumer script. Example content:
-    ```jsonl
-    {"id": 1, "result": "benign"}
-    {"id": 2, "result": "malicious"}
-    ```
-
-If these files are missing, you may encounter file-not-found errors. You can create them manually or use the provided samples above.
 # CyberMoE: A Minimal Mixture-of-Experts Demonstration
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/guerilla7/CyberMoE) 
 
@@ -84,3 +68,20 @@ After running the script, you will see the training progress followed by the fin
 - **`Expert Logits (shows sparse activation)`**: This is the most important part for understanding the MoE's efficiency.
     - `ACTIVATED`: The model computed the output for the "Network" and "Phishing" experts. You can see their raw output scores (logits).
     - `SKIPPED`: The "Malware" expert was deemed irrelevant by the gating network, so its logits are `[0. 0.]`, meaning it was **not computed**. This demonstrates the computational savings of sparse MoE models.
+
+## Data Files Required for Testing
+
+Some scripts (such as `consumer_morpheus_to_cybermoe.py` and `smoke_test.py`) require input and output data files in the `data/` directory:
+
+- `data/cybermoe_input.jsonl`: Input events for smoke tests. Example content:
+    ```jsonl
+    {"id": 1, "event": "Suspicious login attempt from unknown IP address"}
+    {"id": 2, "event": "New vulnerability discovered in Apache HTTP Server"}
+    ```
+- `data/morpheus_out.jsonl`: Output results for the consumer script. Example content:
+    ```jsonl
+    {"id": 1, "result": "benign"}
+    {"id": 2, "result": "malicious"}
+    ```
+
+If these files are missing, you may encounter file-not-found errors. You can create them manually or use the provided samples above.
