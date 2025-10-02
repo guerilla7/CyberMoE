@@ -113,23 +113,22 @@ If `torch.cuda.is_available()` prints `True`, you’re good.
 
 ---
 
-## 6. Install Transformers & Dependencies
+## 6. Install Dependencies
 
 ```bash
-pip install transformers tqdm
+pip install -r requirements.txt
 ```
 
-> This pulls in the `tokenizers` library automatically.
+> This pulls in all the necessary libraries, including `torch`, `transformers`, and `streamlit`.
 
----
+--- 
 
 ## 7. (Optional) CPU‑Only Install
 
-If you don’t have a compatible GPU, install the CPU wheels:
+If you don’t have a compatible GPU, the dependencies are the same. The `torch` package will automatically use the CPU if a GPU is not available.
 
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-pip install transformers tqdm
+pip install -r requirements.txt
 ```
 
 The script will automatically fall back to CPU (`DEVICE = "cpu"`).
@@ -150,8 +149,20 @@ cd cybermoe-demo
 
 ## 9. Run the Demo
 
+There are two ways to run the demo:
+
+### Option A: Interactive Web Demo (Recommended)
+
 ```bash
-python CyberMoe.py      # prints predictions & explanations
+streamlit run app.py
+```
+
+This will start a web server and provide a local URL (usually `http://localhost:8501`) that you can open in your browser.
+
+### Option B: Console Demo
+
+```bash
+python CyberMoe.py
 ```
 
 You should see output similar to:
@@ -184,24 +195,29 @@ RUN apt-get update && \
     apt-get install -y python3.10 python3-pip build-essential git && \
     rm -rf /var/lib/apt/lists/*
 
-# Create venv & install libs
-RUN python3 -m pip install --upgrade pip && \
-    pip install torch torchvision torchaudio \
-        --index-url https://download.pytorch.org/whl/cu118 && \
-    pip install transformers tqdm
-
-# Copy demo
-COPY CyberMoe.py /app/
+# Create app directory
 WORKDIR /app
 
-CMD ["python3", "CyberMoe.py"]
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN python3 -m pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Copy the rest of the application
+COPY . .
+
+# Expose the Streamlit port
+EXPOSE 8501
+
+# Command to run the Streamlit app
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
 ```
 
 Build & run:
 
 ```bash
 docker build -t cybermoe .
-docker run --gpus all cybermoe
+docker run --gpus all -p 8501:8501 cybermoe
 ```
 
 ---

@@ -170,6 +170,24 @@ services:
           memory: 8G
     profiles: ["cpu","gpu"]
 
+  streamlit-app:
+    image: python:3.10-slim
+    container_name: cybermoe-streamlit
+    build: .
+    volumes:
+      - ./:/app
+      - ./data:/app/data
+      - ${TRANSFORMERS_CACHE:-~/.cache/huggingface}/transformers:/root/.cache/huggingface/transformers
+    working_dir: /app
+    ports:
+      - "8501:8501"
+    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    profiles: ["streamlit"]
+
   morpheus-prefilter:
     image: nvidia/morpheus:demo
     container_name: morpheus_prefilter

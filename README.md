@@ -3,7 +3,21 @@
 
 This project provides a minimal, educational implementation of a sparse **Mixture-of-Experts (MoE)** model. It is designed to demonstrate the core concepts of MoE within a cybersecurity context, showing how different "expert" models can be used to classify security-related text.
 
-The script uses a shared `distilbert-base-uncased` encoder and a gating network to route inputs to a selection of specialized experts, demonstrating the principles of specialization, explainability, and efficiency.
+This repository contains two main components:
+1.  A command-line script (`CyberMoe.py`) that trains the model and runs inference on a predefined set of examples.
+2.  An interactive web demo (`app.py`) built with Streamlit that allows you to classify your own sentences and visualize the MoE routing in real-time.
+
+![CyberMoE Interactive Demo](https://i.imgur.com/placeholder.png) *<-- Placeholder for a screenshot of the interactive demo.*
+
+## Project Structure
+
+The project is organized into the following key files:
+
+-   `CyberMoe.py`: The original command-line application for training and demonstration.
+-   `app.py`: The new interactive Streamlit web demo.
+-   `model.py`: Contains the core PyTorch model definitions (`CyberMoE`, `Expert`, `GatingNetwork`) and the training logic, making the model reusable.
+-   `requirements.txt`: A list of all Python dependencies for the project.
+-   `SETUP_GUIDE.md`: A detailed guide for setting up the environment, especially for GPU usage.
 
 ## Core Concepts Demonstrated
 
@@ -37,17 +51,44 @@ The script's main function, `train_demo()`, performs two phases:
 
 ## How to Run
 
-Simply run the `CyberMoe.py` script from your terminal:
+This project comes with two ways to run the model:
+
+### 1. Interactive Web Demo (Recommended)
+
+For the best experience, run the interactive Streamlit demo. This will launch a web page that allows you to input your own text and see the model's analysis in real-time. After entering a sentence, click the "Analyze" button.
+
+```bash
+streamlit run app.py
+```
+
+If the `streamlit` command is not found, you can use the following command:
+
+```bash
+python -m streamlit run app.py
+```
+
+### 2. Original Console Demo
+
+You can still run the original script from your terminal. This will train the model and print the final predictions to the console.
 
 ```bash
 python CyberMoe.py
 ```
 
-By default, this executes the `train_demo()` function, which trains the model and shows the final predictions. This is the recommended way to see the model in action.
-
 ## Interpreting the Output
 
-After running the script, you will see the training progress followed by the final inference results. Here is a sample output for one of the inputs and an explanation of each part.
+### Web Demo Output
+
+The interactive demo provides a visual breakdown of the model's analysis:
+
+-   **Final Prediction:** Shows the final classification ("Benign" or "Malicious") and the model's confidence.
+-   **Gating Network Scores:** A bar chart that visualizes how the gating network rates the relevance of each expert for your input.
+-   **Sparse Activation (Top-2 Experts):** Shows which two experts were selected and activated for the prediction.
+-   **Expert Outputs (Logits):** Displays the raw output from each expert, making it clear which ones were skipped (their output will be `[0. 0.]`).
+
+### Console Output
+
+After running the `CyberMoe.py` script, you will see the training progress followed by the final inference results. Here is a sample output for one of the inputs and an explanation of each part.
 
 ```text
 ================================================================================
