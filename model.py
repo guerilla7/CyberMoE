@@ -18,7 +18,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 # --------------------------------------------------------------------------- #
 # Hyper‑parameters & constants
 # --------------------------------------------------------------------------- #
-NUM_EXPERTS   = 3          # Network, Malware, Phishing
+NUM_EXPERTS   = 5          # Network, Malware, Phishing, Cloud, Web App
 EXPERT_LABELS = 2          # 0 – benign, 1 – malicious
 TOP_K         = 2          # Optional: number of experts to keep (unused in this demo)
 DEVICE        = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -158,7 +158,7 @@ class CyberMoE(nn.Module):
 
         return final_logits, gating_probs, expert_logits
 
-def train_model(progress_callback=None):
+def train_model(progress_callback=None, weighted_loss=True, aux_loss_weight=1e-2):
     """
     Very small training demo on synthetic data.
     In practice you would use real labeled logs, malware samples,
@@ -173,18 +173,48 @@ def train_model(progress_callback=None):
             self.labels = []
 
             themes = {
-                "Network": ["IP address", "firewall", "login attempt", "traffic", "port scan"],
-                "Malware": ["malware", "trojan", "virus", "injection", "system DLL", "exploit"],
-                "Phishing": ["phishing", "email", "attachment", "invoice", "password", "account"],
-                "Benign": ["user activity", "internal portal", "accessing file", "normal operation", "scheduled task"]
+                "Network": [
+                    "Suspicious traffic detected from IP address {keyword1}",
+                    "Firewall blocked connection to {keyword1} on port {keyword2}",
+                    "Multiple failed login attempts from {keyword1}"
+                ],
+                "Malware": [
+                    "A new malware variant, {keyword1}, was found on the system",
+                    "Detected a trojan attempting to inject into {keyword2}",
+                    "The virus {keyword1} is spreading through email attachments"
+                ],
+                "Phishing": [
+                    "A phishing email with the subject '{keyword1}' was detected",
+                    "User clicked on a malicious link in an email about {keyword2}",
+                    "Please reset your password for your {keyword1} account"
+                ],
+                "Cloud Security": [
+                    "Unauthorized access to S3 bucket {keyword1} detected",
+                    "IAM role {keyword1} has been granted excessive permissions",
+                    "Security group {keyword2} is open to the world"
+                ],
+                "Web App Security": [
+                    "Potential SQL injection attack detected on the login page with user '{keyword1}'",
+                    "Cross-site scripting (XSS) vulnerability found in the search bar: {keyword2}",
+                    "A CSRF token mismatch was detected for user {keyword1}"
+                ],
+                "Benign": [
+                    "User {keyword1} successfully logged into the internal portal",
+                    "Scheduled task {keyword2} completed successfully",
+                    "Accessing file {keyword1} from the shared drive"
+                ]
             }
 
             for _ in range(num_samples):
                 theme_name = random.choice(list(themes.keys()))
-                keyword1 = random.choice(themes[theme_name])
-                keyword2 = random.choice(themes[theme_name])
+                template = random.choice(themes[theme_name])
                 
-                self.texts.append(f"Log entry: detected {keyword1} and {keyword2}.")
+                # This is a simplified way to get some keywords. 
+                # In a real scenario, you would have better keyword lists.
+                keyword1 = random.choice(["user123", "admin", "test.exe", "/api/v1/users", "prod-db"])
+                keyword2 = random.choice(["8080", "443", "/etc/passwd", "confidential.pdf", "backup.zip"])
+
+                self.texts.append(template.format(keyword1=keyword1, keyword2=keyword2))
                 
                 label = 1 if theme_name != "Benign" else 0
                 self.labels.append(label)
@@ -208,18 +238,35 @@ def train_model(progress_callback=None):
     # Model & optimizer
     model = CyberMoE().to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
-    criterion = nn.CrossEntropyLoss()
+    
+    # Weighted loss
+    if weighted_loss:
+        # Roughly 5 malicious themes to 1 benign theme
+        class_weights = torch.tensor([0.6, 3.0]).to(DEVICE)
+        criterion = nn.CrossEntropyLoss(weight=class_weights)
+    else:
+        criterion = nn.CrossEntropyLoss()
 
     # Training loop (few epochs for demo)
     model.train()
-    for epoch in range(3):
+    for epoch in range(5):
         total_loss = 0.0
         all_preds = []
         all_labels = []
         for i, (texts, labels) in enumerate(loader):
             optimizer.zero_grad()
-            logits, _, _ = model(texts)
+            logits, gating_probs, _ = model(texts)
+            
+            # Main classification loss
             loss = criterion(logits, labels.to(DEVICE))
+            
+            # Auxiliary load balancing loss
+            if aux_loss_weight > 0:
+                mean_gating_probs = torch.mean(gating_probs, dim=0)
+                cv_sq = (torch.std(mean_gating_probs) / torch.mean(mean_gating_probs))**2
+                aux_loss = aux_loss_weight * cv_sq
+                loss += aux_loss
+
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
@@ -227,7 +274,7 @@ def train_model(progress_callback=None):
             all_preds.extend(preds)
             all_labels.extend(labels.cpu().numpy())
             if progress_callback:
-                progress_callback((epoch * len(loader) + i) / (3 * len(loader)))
+                progress_callback((epoch * len(loader) + i) / (5 * len(loader)))
 
 
         avg_loss = total_loss / len(loader)

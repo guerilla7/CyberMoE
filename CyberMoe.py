@@ -19,16 +19,16 @@ from model import CyberMoE, train_model, TOP_K, DEVICE
 def demo(model):
     model.eval()  # inference mode
 
-    # Expert names for clearer output
-    expert_names = ["Network", "Malware", "Phishing"]
+    expert_names = ["Network", "Malware", "Phishing", "Cloud Security", "Web App Security"]
 
-    # Example inputs (feel free to add your own)
     texts = [
         "Suspicious login attempt from unknown IP address",
         "New vulnerability discovered in Apache HTTP Server",
         "Phishing email with malicious attachment detected",
         "Normal user activity: accessing internal portal",
-        "Malware sample shows code injection in system DLL"
+        "Malware sample shows code injection in system DLL",
+        "Unusual IAM role assumption in AWS",
+        "Potential SQL injection attack detected in web server logs"
     ]
 
     with torch.no_grad():
@@ -83,13 +83,15 @@ def train_demo():
     print("\n--- Post‑training inference ---")
     
     model.eval()
-    expert_names = ["Network", "Malware", "Phishing"]
+    expert_names = ["Network", "Malware", "Phishing", "Cloud Security", "Web App Security"]
     texts = [
         "Suspicious login attempt from unknown IP address",
         "New vulnerability discovered in Apache HTTP Server",
         "Phishing email with malicious attachment detected",
         "Normal user activity: accessing internal portal",
-        "Malware sample shows code injection in system DLL"
+        "Malware sample shows code injection in system DLL",
+        "Unusual IAM role assumption in AWS",
+        "Potential SQL injection attack detected in web server logs"
     ]
     
     with torch.no_grad():
@@ -118,7 +120,7 @@ def train_demo():
                 print(f"    Expert {j} ({expert_names[j]}) logits: {exp_logit} <-- SKIPPED")
 
     # Illustrative confusion matrix for the demo inputs
-    true_demo_labels = [1, 1, 1, 0, 1] # Malicious, Malicious, Phishing, Benign, Malware
+    true_demo_labels = [1, 1, 1, 0, 1, 1, 1] # Malicious, Malicious, Phishing, Benign, Malware, Cloud, Web App
     final_preds = [int(p.argmax()) for p in probs]
     demo_acc = accuracy_score(true_demo_labels, final_preds)
     demo_cm = confusion_matrix(true_demo_labels, final_preds)

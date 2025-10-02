@@ -25,7 +25,7 @@ The project is organized into the following key files:
 This script is a hands-on demonstration of a modern MoE architecture:
 
 1.  **Shared Encoder**: A single `distilbert-base-uncased` model from HuggingFace processes the input text into numerical representations.
-2.  **Specialized Experts**: Three simple neural networks act as classifiers for three distinct (simulated) domains: "Network", "Malware", and "Phishing".
+2.  **Specialized Experts**: Five simple neural networks act as classifiers for five distinct (simulated) domains: "Network", "Malware", "Phishing", "Cloud Security", and "Web App Security".
 3.  **Gating Network**: A small network that analyzes the encoded text and assigns a relevance score to each expert.
 4.  **Sparse Routing (Top-K)**: To demonstrate efficiency, the model only **activates the Top-K (K=2)** most relevant experts for any given input. The output of the non-selected expert is skipped entirely, saving computation.
 

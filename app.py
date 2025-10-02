@@ -1,4 +1,32 @@
+import streamlit as st
+import torch
+import pandas as pd
+from model import train_model, CyberMoE, TOP_K
+
+# --- Sidebar Controls ---
+st.sidebar.title("⚙️ Controls")
+use_weighted_loss = st.sidebar.checkbox("Use Weighted Loss", value=True)
+use_aux_loss = st.sidebar.checkbox("Use Auxiliary Load Balancing Loss", value=True)
+aux_loss_weight = st.sidebar.number_input(
+    "Auxiliary Loss Weight", 
+    min_value=0.0, 
+    max_value=1.0, 
+    value=0.01, 
+    step=0.01, 
+    disabled=not use_aux_loss
+)
+if not use_aux_loss:
+    aux_loss_weight = 0.0
+if st.sidebar.button("Restart Demo (retrain model)"):
+    st.cache_resource.clear()
+    if 'analysis_results' in st.session_state:
+        del st.session_state.analysis_results
+    st.rerun()
 #!/usr/bin/env python3
+import streamlit as st
+import torch
+import pandas as pd
+from model import train_model, CyberMoE, TOP_K
 """
 CyberMoE – Interactive Streamlit Demo
 
@@ -16,13 +44,17 @@ from model import train_model, CyberMoE, TOP_K
 # --------------------------------------------------------------------------- #
 
 @st.cache_resource
-def load_model():
+def load_model(weighted_loss, aux_loss_weight):
     """Trains the model and caches it for future runs."""
     progress_bar = st.progress(0, text="Training model, please wait...")
     def update_progress(fraction):
         progress_bar.progress(fraction)
     
-    model = train_model(progress_callback=update_progress)
+    model = train_model(
+        progress_callback=update_progress, 
+        weighted_loss=weighted_loss, 
+        aux_loss_weight=aux_loss_weight
+    )
     model.eval() # Set to inference mode
     progress_bar.empty()
     return model
@@ -60,6 +92,8 @@ digraph CyberMoE {
         "Expert 1 (Network)" [fillcolor="#800000"];
         "Expert 2 (Malware)" [fillcolor="#800000"];
         "Expert 3 (Phishing)" [fillcolor="#800000"];
+        "Expert 4 (Cloud Security)" [fillcolor="#800000"];
+        "Expert 5 (Web App Security)" [fillcolor="#800000"];
     }
 
     "Final Prediction" [shape=plaintext, fillcolor="#006400"];
@@ -69,11 +103,15 @@ digraph CyberMoE {
     "Shared Encoder (DistilBERT)" -> "Expert 1 (Network)" [style=dashed, arrowhead=none];
     "Shared Encoder (DistilBERT)" -> "Expert 2 (Malware)" [style=dashed, arrowhead=none];
     "Shared Encoder (DistilBERT)" -> "Expert 3 (Phishing)" [style=dashed, arrowhead=none];
+    "Shared Encoder (DistilBERT)" -> "Expert 4 (Cloud Security)" [style=dashed, arrowhead=none];
+    "Shared Encoder (DistilBERT)" -> "Expert 5 (Web App Security)" [style=dashed, arrowhead=none];
 
     "Gating Network" -> "Top-K Routing";
     "Top-K Routing" -> "Expert 1 (Network)" [label="  Activate"];
     "Top-K Routing" -> "Expert 2 (Malware)" [label="  Activate"];
     "Top-K Routing" -> "Expert 3 (Phishing)" [label="  Skip", style=dotted];
+    "Top-K Routing" -> "Expert 4 (Cloud Security)" [label="  Skip", style=dotted];
+    "Top-K Routing" -> "Expert 5 (Web App Security)" [label="  Skip", style=dotted];
 
     "Expert 1 (Network)" -> "Final Prediction";
     "Expert 2 (Malware)" -> "Final Prediction";
@@ -83,9 +121,11 @@ with st.container(border=True):
     st.graphviz_chart(architecture_diagram)
 
 
+# --- Sidebar Controls ---
+
 # Load the model
-model = load_model()
-expert_names = ["Network", "Malware", "Phishing"]
+model = load_model(use_weighted_loss, aux_loss_weight)
+expert_names = ["Network", "Malware", "Phishing", "Cloud Security", "Web App Security"]
 
 # --- Input Area ---
 st.header("Analyze a Security Event")
@@ -165,16 +205,13 @@ st.sidebar.title("💡 How It Works")
 st.sidebar.info("""
 1.  **Shared Encoder**: The input text is converted into a numerical representation by a single, shared `distilbert` model.
 
-2.  **Gating Network**: A small neural network analyzes this representation and assigns a relevance score to each specialized expert (Network, Malware, Phishing).
+2.  **Gating Network**: A small neural network analyzes this representation and assigns a relevance score to each specialized expert.
 
 3.  **Sparse Routing**: To be efficient, the model only activates the **Top-2** experts with the highest scores. The other experts are skipped entirely.
 
-4.  **Final Decision**: The outputs of the activated experts are combined, weighted by their scores, to produce the final classification (Benign or Malicious).
-""")
+4.  **Final Decision**: The outputs of the activated experts are combined, weighted by their scores, to produce the final classification.
 
-st.sidebar.title("⚙️ Controls")
-if st.sidebar.button("Restart Demo (retrain model)"):
-    st.cache_resource.clear()
-    if 'analysis_results' in st.session_state:
-        del st.session_state.analysis_results
-    st.rerun()
+**Advanced Training Features:**
+- **Weighted Loss:** Gives more importance to the under-represented "Benign" class during training to improve accuracy.
+- **Auxiliary Load Balancing Loss:** Encourages the gating network to use all experts more evenly, preventing it from relying too heavily on just a few.
+""")
