@@ -34,10 +34,54 @@ def load_model():
 st.set_page_config(page_title="CyberMoE Demo", layout="wide")
 
 st.title("🤖 CyberMoE: An Interactive Mixture-of-Experts Demo")
+
 st.write("""
 This demo showcases a sparse Mixture-of-Experts (MoE) model for cybersecurity text classification. 
 Enter a security-related sentence below and see how the model analyzes it in real-time.
 """)
+
+architecture_diagram = '''
+digraph CyberMoE {
+    rankdir=TB;
+    graph [bgcolor="transparent"];
+    node [shape=box, style="rounded,filled", fillcolor="#444444", fontname="sans-serif", fontcolor="white"];
+    edge [fontname="sans-serif", color="white", fontcolor="white"];
+
+    "Input Text" [shape=plaintext, fontcolor="white"];
+    "Shared Encoder (DistilBERT)" [fillcolor="#004080"];
+    "Gating Network" [fillcolor="#808000"];
+    "Top-K Routing" [shape=diamond, fillcolor="#b35900"];
+
+    subgraph cluster_experts {
+        label = "Specialized Experts";
+        style = "rounded";
+        bgcolor = "#333333";
+        fontcolor = "white";
+        "Expert 1 (Network)" [fillcolor="#800000"];
+        "Expert 2 (Malware)" [fillcolor="#800000"];
+        "Expert 3 (Phishing)" [fillcolor="#800000"];
+    }
+
+    "Final Prediction" [shape=plaintext, fillcolor="#006400"];
+
+    "Input Text" -> "Shared Encoder (DistilBERT)";
+    "Shared Encoder (DistilBERT)" -> "Gating Network";
+    "Shared Encoder (DistilBERT)" -> "Expert 1 (Network)" [style=dashed, arrowhead=none];
+    "Shared Encoder (DistilBERT)" -> "Expert 2 (Malware)" [style=dashed, arrowhead=none];
+    "Shared Encoder (DistilBERT)" -> "Expert 3 (Phishing)" [style=dashed, arrowhead=none];
+
+    "Gating Network" -> "Top-K Routing";
+    "Top-K Routing" -> "Expert 1 (Network)" [label="  Activate"];
+    "Top-K Routing" -> "Expert 2 (Malware)" [label="  Activate"];
+    "Top-K Routing" -> "Expert 3 (Phishing)" [label="  Skip", style=dotted];
+
+    "Expert 1 (Network)" -> "Final Prediction";
+    "Expert 2 (Malware)" -> "Final Prediction";
+}
+'''
+with st.container(border=True):
+    st.graphviz_chart(architecture_diagram)
+
 
 # Load the model
 model = load_model()
