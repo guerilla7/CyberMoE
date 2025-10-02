@@ -7,7 +7,8 @@ This repository contains two main components:
 1.  A command-line script (`CyberMoe.py`) that trains the model and runs inference on a predefined set of examples.
 2.  An interactive web demo (`app.py`) built with Streamlit that allows you to classify your own sentences and visualize the MoE routing in real-time.
 
-![CyberMoE Interactive Demo](https://i.imgur.com/placeholder.png) *<-- Placeholder for a screenshot of the interactive demo.*
+<img width="1305" height="1073" alt="Screenshot 2025-10-01 at 11 39 32 PM" src="https://github.com/user-attachments/assets/2232435d-f58d-47dd-8496-73271a399bc1" />
+<img width="1305" height="1011" alt="Screenshot 2025-10-01 at 11 40 56 PM" src="https://github.com/user-attachments/assets/16c149a2-8939-4dd2-a346-4d00541b03ec" />
 
 ## Project Structure
 
