@@ -20,7 +20,6 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 # --------------------------------------------------------------------------- #
 NUM_EXPERTS   = 5          # Network, Malware, Phishing, Cloud, Web App
 EXPERT_LABELS = 2          # 0 – benign, 1 – malicious
-TOP_K         = 2          # Optional: number of experts to keep (unused in this demo)
 DEVICE        = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # --------------------------------------------------------------------------- #
@@ -78,13 +77,13 @@ class CyberMoE(nn.Module):
     """
     def __init__(self, num_experts: int = NUM_EXPERTS,
                  expert_labels: int = EXPERT_LABELS,
-                 top_k: int = TOP_K):
+                 top_k: int = 2):
         super().__init__()
         self.top_k = top_k
 
         # Shared encoder & tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
-        self.encoder   = AutoModel.from_pretrained("distilbert-base-uncased")
+        self.tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        self.encoder   = AutoModel.from_pretrained("bert-base-uncased")
 
         hidden_size = self.encoder.config.hidden_size
 
@@ -158,7 +157,45 @@ class CyberMoE(nn.Module):
 
         return final_logits, gating_probs, expert_logits
 
-def train_model(progress_callback=None, weighted_loss=True, aux_loss_weight=1e-2):
+    def explain_gating(self, text: str, target_expert_idx: int):
+        """
+        Calculates the importance of each word in the input text for the gating
+        decision for a specific expert.
+        """
+        # Tokenize the input text
+        inputs = self.tokenizer(text, return_tensors="pt").to(DEVICE)
+        input_ids = inputs["input_ids"]
+        
+        # Get the word embeddings
+        word_embeddings = self.encoder.embeddings.word_embeddings(input_ids)
+        word_embeddings.retain_grad()
+
+        # Forward pass through the encoder
+        encoder_output = self.encoder(inputs_embeds=word_embeddings)
+        hidden_state = encoder_output.last_hidden_state
+
+        # Gating decision
+        gating_probs = self.gating_net(hidden_state)
+        target_expert_prob = gating_probs[0, target_expert_idx]
+
+        # Calculate gradients
+        target_expert_prob.backward()
+
+        # Get the gradients of the word embeddings
+        word_gradients = word_embeddings.grad.squeeze(0)
+        
+        # Calculate the norm of the gradients for each word
+        word_importances = torch.norm(word_gradients, dim=1)
+        
+        # Normalize the importances
+        word_importances = (word_importances - word_importances.min()) / (word_importances.max() - word_importances.min())
+        
+        # Get the tokens
+        tokens = self.tokenizer.convert_ids_to_tokens(input_ids.squeeze(0))
+        
+        return list(zip(tokens, word_importances.cpu().numpy()))
+
+def train_model(progress_callback=None, weighted_loss=True, aux_loss_weight=1e-2, top_k=2):
     """
     Very small training demo on synthetic data.
     In practice you would use real labeled logs, malware samples,
@@ -236,7 +273,7 @@ def train_model(progress_callback=None, weighted_loss=True, aux_loss_weight=1e-2
     )
 
     # Model & optimizer
-    model = CyberMoE().to(DEVICE)
+    model = CyberMoE(top_k=top_k).to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
     
     # Weighted loss

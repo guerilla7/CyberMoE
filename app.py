@@ -1,32 +1,4 @@
-import streamlit as st
-import torch
-import pandas as pd
-from model import train_model, CyberMoE, TOP_K
-
-# --- Sidebar Controls ---
-st.sidebar.title("⚙️ Controls")
-use_weighted_loss = st.sidebar.checkbox("Use Weighted Loss", value=True)
-use_aux_loss = st.sidebar.checkbox("Use Auxiliary Load Balancing Loss", value=True)
-aux_loss_weight = st.sidebar.number_input(
-    "Auxiliary Loss Weight", 
-    min_value=0.0, 
-    max_value=1.0, 
-    value=0.01, 
-    step=0.01, 
-    disabled=not use_aux_loss
-)
-if not use_aux_loss:
-    aux_loss_weight = 0.0
-if st.sidebar.button("Restart Demo (retrain model)"):
-    st.cache_resource.clear()
-    if 'analysis_results' in st.session_state:
-        del st.session_state.analysis_results
-    st.rerun()
 #!/usr/bin/env python3
-import streamlit as st
-import torch
-import pandas as pd
-from model import train_model, CyberMoE, TOP_K
 """
 CyberMoE – Interactive Streamlit Demo
 
@@ -37,14 +9,14 @@ Date:    2025‑09‑12
 import streamlit as st
 import torch
 import pandas as pd
-from model import train_model, CyberMoE, TOP_K
+from model import train_model, CyberMoE, NUM_EXPERTS
 
 # --------------------------------------------------------------------------- #
 # Model Loading (with caching)
 # --------------------------------------------------------------------------- #
 
 @st.cache_resource
-def load_model(weighted_loss, aux_loss_weight):
+def load_model(weighted_loss, aux_loss_weight, top_k):
     """Trains the model and caches it for future runs."""
     progress_bar = st.progress(0, text="Training model, please wait...")
     def update_progress(fraction):
@@ -53,7 +25,8 @@ def load_model(weighted_loss, aux_loss_weight):
     model = train_model(
         progress_callback=update_progress, 
         weighted_loss=weighted_loss, 
-        aux_loss_weight=aux_loss_weight
+        aux_loss_weight=aux_loss_weight,
+        top_k=top_k
     )
     model.eval() # Set to inference mode
     progress_bar.empty()
@@ -80,7 +53,7 @@ digraph CyberMoE {
     edge [fontname="sans-serif", color="white", fontcolor="white"];
 
     "Input Text" [shape=plaintext, fontcolor="white"];
-    "Shared Encoder (DistilBERT)" [fillcolor="#004080"];
+    "Shared Encoder (BERT)" [fillcolor="#004080"];
     "Gating Network" [fillcolor="#808000"];
     "Top-K Routing" [shape=diamond, fillcolor="#b35900"];
 
@@ -98,23 +71,26 @@ digraph CyberMoE {
 
     "Final Prediction" [shape=plaintext, fillcolor="#006400"];
 
-    "Input Text" -> "Shared Encoder (DistilBERT)";
-    "Shared Encoder (DistilBERT)" -> "Gating Network";
-    "Shared Encoder (DistilBERT)" -> "Expert 1 (Network)" [style=dashed, arrowhead=none];
-    "Shared Encoder (DistilBERT)" -> "Expert 2 (Malware)" [style=dashed, arrowhead=none];
-    "Shared Encoder (DistilBERT)" -> "Expert 3 (Phishing)" [style=dashed, arrowhead=none];
-    "Shared Encoder (DistilBERT)" -> "Expert 4 (Cloud Security)" [style=dashed, arrowhead=none];
-    "Shared Encoder (DistilBERT)" -> "Expert 5 (Web App Security)" [style=dashed, arrowhead=none];
+    "Input Text" -> "Shared Encoder (BERT)";
+    "Shared Encoder (BERT)" -> "Gating Network";
+    "Shared Encoder (BERT)" -> "Expert 1 (Network)" [style=dashed, arrowhead=none];
+    "Shared Encoder (BERT)" -> "Expert 2 (Malware)" [style=dashed, arrowhead=none];
+    "Shared Encoder (BERT)" -> "Expert 3 (Phishing)" [style=dashed, arrowhead=none];
+    "Shared Encoder (BERT)" -> "Expert 4 (Cloud Security)" [style=dashed, arrowhead=none];
+    "Shared Encoder (BERT)" -> "Expert 5 (Web App Security)" [style=dashed, arrowhead=none];
 
     "Gating Network" -> "Top-K Routing";
-    "Top-K Routing" -> "Expert 1 (Network)" [label="  Activate"];
-    "Top-K Routing" -> "Expert 2 (Malware)" [label="  Activate"];
-    "Top-K Routing" -> "Expert 3 (Phishing)" [label="  Skip", style=dotted];
-    "Top-K Routing" -> "Expert 4 (Cloud Security)" [label="  Skip", style=dotted];
-    "Top-K Routing" -> "Expert 5 (Web App Security)" [label="  Skip", style=dotted];
+    "Top-K Routing" -> "Expert 1 (Network)" [style=dotted];
+    "Top-K Routing" -> "Expert 2 (Malware)" [style=dotted];
+    "Top-K Routing" -> "Expert 3 (Phishing)" [style=dotted];
+    "Top-K Routing" -> "Expert 4 (Cloud Security)" [style=dotted];
+    "Top-K Routing" -> "Expert 5 (Web App Security)" [style=dotted];
 
-    "Expert 1 (Network)" -> "Final Prediction";
-    "Expert 2 (Malware)" -> "Final Prediction";
+    "Expert 1 (Network)" -> "Final Prediction" [style=dotted];
+    "Expert 2 (Malware)" -> "Final Prediction" [style=dotted];
+    "Expert 3 (Phishing)" -> "Final Prediction" [style=dotted];
+    "Expert 4 (Cloud Security)" -> "Final Prediction" [style=dotted];
+    "Expert 5 (Web App Security)" -> "Final Prediction" [style=dotted];
 }
 '''
 with st.container(border=True):
@@ -122,9 +98,31 @@ with st.container(border=True):
 
 
 # --- Sidebar Controls ---
+st.sidebar.title("⚙️ Controls")
+
+top_k = st.sidebar.slider("Number of Experts to Use (Top-K)", min_value=1, max_value=NUM_EXPERTS, value=2, step=1)
+use_weighted_loss = st.sidebar.checkbox("Use Weighted Loss", value=True)
+use_aux_loss = st.sidebar.checkbox("Use Auxiliary Load Balancing Loss", value=True)
+aux_loss_weight = st.sidebar.number_input(
+    "Auxiliary Loss Weight", 
+    min_value=0.0, 
+    max_value=1.0, 
+    value=0.01, 
+    step=0.01, 
+    disabled=not use_aux_loss
+)
+
+if not use_aux_loss:
+    aux_loss_weight = 0.0
+
+if st.sidebar.button("Restart Demo (retrain model)"):
+    st.cache_resource.clear()
+    if 'analysis_results' in st.session_state:
+        del st.session_state.analysis_results
+    st.rerun()
 
 # Load the model
-model = load_model(use_weighted_loss, aux_loss_weight)
+model = load_model(use_weighted_loss, aux_loss_weight, top_k)
 expert_names = ["Network", "Malware", "Phishing", "Cloud Security", "Web App Security"]
 
 # --- Input Area ---
@@ -141,6 +139,7 @@ if st.button("Analyze", use_container_width=True):
         with torch.no_grad():
             final_logits, gating_probs, expert_logits = model([user_input])
         st.session_state.analysis_results = (final_logits, gating_probs, expert_logits)
+        st.session_state.user_input_for_analysis = user_input
     else:
         st.warning("Please enter some text to analyze.")
         if 'analysis_results' in st.session_state:
@@ -172,10 +171,10 @@ if 'analysis_results' in st.session_state:
 
     # --- Column 2: Expert Activation ---
     with col2:
-        st.subheader(f"Sparse Activation (Top-{TOP_K} Experts)")
+        st.subheader(f"Sparse Activation (Top-{top_k} Experts)")
         st.write("Only the most relevant experts are used to save computation.")
 
-        topk_vals, topk_idx = torch.topk(gating_probs[0], TOP_K)
+        topk_vals, topk_idx = torch.topk(gating_probs[0], top_k)
         topk_names = [expert_names[idx] for idx in topk_idx]
 
         activated_experts_df = pd.DataFrame({
@@ -200,14 +199,33 @@ if 'analysis_results' in st.session_state:
         expert_output_df = pd.DataFrame(expert_output_data)
         st.table(expert_output_df)
 
-# --- Explanation Section ---
+    # --- Explanation Section ---
+    st.header("🕵️‍♀️ Explain the Gating Decision")
+    st.write("See which words in your input sentence were most influential for a specific expert's score.")
+    
+    expert_to_explain = st.selectbox("Select expert to explain:", expert_names)
+    
+    if st.button("Explain Routing"):
+        if 'user_input_for_analysis' in st.session_state:
+            text_to_explain = st.session_state.user_input_for_analysis
+            word_importances = model.explain_gating(text_to_explain, expert_names.index(expert_to_explain))
+            
+            # Display as a table for simplicity
+            explanation_df = pd.DataFrame(word_importances, columns=["Token", "Importance"])
+            explanation_df = explanation_df[explanation_df.Token.isin(["[CLS]", "[SEP]"]) == False]
+            st.dataframe(explanation_df)
+        else:
+            st.warning("Please analyze a sentence first.")
+
+
+# --- Sidebar Explanation ---
 st.sidebar.title("💡 How It Works")
-st.sidebar.info("""
-1.  **Shared Encoder**: The input text is converted into a numerical representation by a single, shared `distilbert` model.
+st.sidebar.info(f"""
+1.  **Shared Encoder**: The input text is converted into a numerical representation by a single, shared `bert-base-uncased` model.
 
 2.  **Gating Network**: A small neural network analyzes this representation and assigns a relevance score to each specialized expert.
 
-3.  **Sparse Routing**: To be efficient, the model only activates the **Top-2** experts with the highest scores. The other experts are skipped entirely.
+3.  **Sparse Routing**: To be efficient, the model only activates the **Top-{top_k}** experts with the highest scores. The other experts are skipped entirely.
 
 4.  **Final Decision**: The outputs of the activated experts are combined, weighted by their scores, to produce the final classification.
 
