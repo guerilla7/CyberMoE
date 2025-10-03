@@ -12,6 +12,8 @@ import pandas as pd
 from model import train_model, CyberMoE, NUM_EXPERTS
 from preprocessor import CyberPreprocessor
 from feedback import log_feedback
+from rlhf_reward_model import train_reward_model
+from finetune_from_feedback import finetune_from_feedback
 
 # --------------------------------------------------------------------------- #
 # Model Loading (with caching)
@@ -134,8 +136,31 @@ if st.sidebar.button("Restart Demo (retrain model)"):
         del st.session_state.analysis_results
     st.rerun()
 
-# Load the model
-model = load_model(use_weighted_loss, aux_loss_weight, top_k, use_pretraining)
+# --- RLHF Training Utilities ---
+st.sidebar.markdown("---")
+st.sidebar.title("🧪 RLHF Utilities")
+if st.sidebar.button("Train Reward Model from Feedback"):
+    with st.spinner("Training reward model from data/feedback.jsonl..."):
+        try:
+            save_path = train_reward_model()
+            st.sidebar.success(f"Reward model trained and saved to: {save_path}")
+        except Exception as e:
+            st.sidebar.error(f"Failed to train reward model: {e}")
+
+if st.sidebar.button("Fine-tune Model from Feedback"):
+    with st.spinner("Fine-tuning CyberMoE from feedback..."):
+        try:
+            ft_model = finetune_from_feedback()
+            st.session_state.override_model = ft_model.eval()
+            st.sidebar.success("Fine-tuned model is now active for this session.")
+        except Exception as e:
+            st.sidebar.error(f"Failed to fine-tune from feedback: {e}")
+
+# Load the model (use fine-tuned model if available)
+if 'override_model' in st.session_state and st.session_state.override_model is not None:
+    model = st.session_state.override_model
+else:
+    model = load_model(use_weighted_loss, aux_loss_weight, top_k, use_pretraining)
 expert_names = ["Network", "Malware", "Phishing", "Cloud Security", "Web App Security"]
 
 # --- Input Area ---
