@@ -237,9 +237,3 @@ Here are some pioneering and relevant research papers on Mixture-of-Experts (MoE
 
 - **Gururangan et al. (2022) – “Mixture-of-Experts for Knowledge-Intensive NLP Tasks”**  
   [arXiv:2202.08906](https://arxiv.org/abs/2202.08906) – Explores MoE’s effectiveness in tasks requiring specialized domain knowledge.
-
-- **Jiang et al. (2022) – “Mixture of Experts with Heterogeneous Expert Selection for Cybersecurity Threat Detection”**  
-  [IEEE Xplore](https://ieeexplore.ieee.org/document/9867638) – Examines MoE architectures specifically for cybersecurity threat detection tasks.
-
-- **Qiu et al. (2022) – “A Mixture-of-Experts Approach for Intrusion Detection in Cybersecurity”**  
-  [ScienceDirect](https://www.sciencedirect.com/science/article/pii/S0957417422013615) – Applies MoE to intrusion detection, using domain-specialized experts to improve accuracy.
