@@ -60,7 +60,8 @@ class FeedbackFTDataset(Dataset):
 
 def collate_texts(batch):
     texts = [t for t, _ in batch]
-    labels = torch.stack([y for _, y in batch])
+    # Ensure labels are consistent 1D tensor
+    labels = torch.tensor([int(y.item()) if isinstance(y, torch.Tensor) else int(y) for _, y in batch], dtype=torch.long)
     return texts, labels
 
 

@@ -242,7 +242,22 @@ class CyberMoE(nn.Module):
         attention_mask = encoded["attention_mask"].to(self.device)
         
         # Stack preprocessed features
-        entity_types = torch.stack([f['entity_types'] for f in batch_features]).to(self.device)
+        # Align entity_types per-sample to tokenizer sequence length via pad/truncate
+        seq_len = input_ids.size(1)
+        entity_types_list = []
+        for f in batch_features:
+            et = f['entity_types']
+            if not isinstance(et, torch.Tensor):
+                et = torch.tensor(et, dtype=torch.long)
+            et = et.long().view(-1)
+            L = et.size(0)
+            if L >= seq_len:
+                et_adj = et[:seq_len]
+            else:
+                et_adj = torch.zeros(seq_len, dtype=torch.long)
+                et_adj[:L] = et
+            entity_types_list.append(et_adj)
+        entity_types = torch.stack(entity_types_list, dim=0).to(self.device)
         
         # Handle domain scores with more careful shape handling
         # Each item should be [num_domains], stacked to [batch, num_domains]
@@ -334,7 +349,19 @@ class CyberMoE(nn.Module):
             
             # Get preprocessor features
             features = self.preprocessor.process(text)
-            entity_types = features['entity_types'].unsqueeze(0).to(self.device)
+            # Align entity_types to tokenizer sequence length
+            seq_len = input_ids.size(1)
+            et = features['entity_types']
+            if not isinstance(et, torch.Tensor):
+                et = torch.tensor(et, dtype=torch.long)
+            et = et.long().view(-1)
+            L = et.size(0)
+            if L >= seq_len:
+                et_adj = et[:seq_len]
+            else:
+                et_adj = torch.zeros(seq_len, dtype=torch.long)
+                et_adj[:L] = et
+            entity_types = et_adj.unsqueeze(0).to(self.device)
             domain_scores = features['domain_scores'].unsqueeze(0).to(self.device)
             
             # Get embeddings
