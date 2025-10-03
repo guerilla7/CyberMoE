@@ -182,21 +182,125 @@ else:
 # Import feedback.jsonl (append or replace)
 uploaded_file = st.sidebar.file_uploader("Upload feedback.jsonl", type=["jsonl", "json"], accept_multiple_files=False)
 import_action = st.sidebar.radio("Import mode", ["Append", "Replace"], horizontal=True)
+# Confirmation for destructive replace
+confirm_replace = False
+if import_action == "Replace":
+    confirm_replace = st.sidebar.checkbox("Confirm replace (destructive)", value=False)
+
+# Basic JSONL schema validation helper
+def _validate_feedback_jsonl(content: bytes, max_errors: int = 5):
+    import json
+    try:
+        text = content.decode("utf-8")
+    except Exception as e:
+        return False, None, {"errors": [f"File is not valid UTF-8: {e}"]}
+    lines = text.splitlines()
+    out_lines = []
+    errors = []
+    valid = 0
+    def _norm_label(val):
+        if isinstance(val, str):
+            low = val.strip().lower()
+            if low in ("benign", "malicious"):
+                return "Malicious" if low == "malicious" else "Benign"
+            if low in ("1", "true", "yes"):
+                return "Malicious"
+            if low in ("0", "false", "no"):
+                return "Benign"
+        if isinstance(val, (int, float)):
+            return "Malicious" if int(val) == 1 else "Benign"
+        return None
+    def _norm_bool(val):
+        if isinstance(val, bool):
+            return val
+        if isinstance(val, str):
+            low = val.strip().lower()
+            if low in ("true", "yes", "1"): return True
+            if low in ("false", "no", "0"): return False
+        return None
+    for idx, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        try:
+            rec = json.loads(line)
+        except Exception as e:
+            errors.append(f"Line {idx}: invalid JSON ({e})")
+            if len(errors) >= max_errors:
+                break
+            continue
+        if not isinstance(rec, dict):
+            errors.append(f"Line {idx}: not a JSON object")
+            if len(errors) >= max_errors:
+                break
+            continue
+        # Required fields
+        ui = rec.get("user_input")
+        if not isinstance(ui, str) or not ui.strip():
+            errors.append(f"Line {idx}: missing or invalid 'user_input' (string required)")
+        uf = _norm_bool(rec.get("user_feedback"))
+        if uf is None:
+            errors.append(f"Line {idx}: missing or invalid 'user_feedback' (bool or 'true'/'false')")
+        else:
+            rec["user_feedback"] = uf
+        # Optional normalization
+        pl = rec.get("pred_label")
+        if pl is not None:
+            nl = _norm_label(pl)
+            if nl is None:
+                errors.append(f"Line {idx}: invalid 'pred_label' (expected Benign/Malicious)")
+            else:
+                rec["pred_label"] = nl
+        corr = rec.get("correction")
+        if corr is not None:
+            nl = _norm_label(corr)
+            if nl is None:
+                errors.append(f"Line {idx}: invalid 'correction' (expected Benign/Malicious)")
+            else:
+                rec["correction"] = nl
+        if errors and len(errors) >= max_errors:
+            break
+        if not errors or (errors and not errors[-1].startswith(f"Line {idx}:")):
+            # Only count as valid if no new error added for this line
+            valid += 1
+            out_lines.append(json.dumps(rec, ensure_ascii=False))
+    if errors:
+        return False, None, {"errors": errors[:max_errors], "valid": valid}
+    if valid == 0:
+        return False, None, {"errors": ["No valid JSONL records found."], "valid": 0}
+    normalized = ("\n".join(out_lines) + "\n").encode("utf-8")
+    return True, normalized, {"valid": valid}
+
 if uploaded_file is not None:
     try:
         os.makedirs(os.path.dirname(DEFAULT_FEEDBACK_PATH), exist_ok=True)
         content = uploaded_file.getvalue()
-        if import_action == "Replace":
-            with open(DEFAULT_FEEDBACK_PATH, "wb") as f:
-                f.write(content)
-            st.sidebar.success("Replaced feedback.jsonl with uploaded file.")
+        ok, normalized, info = _validate_feedback_jsonl(content)
+        if not ok:
+            errs = info.get("errors", []) if isinstance(info, dict) else []
+            st.sidebar.error("Upload failed schema check.\n" + "\n".join(errs))
         else:
-            with open(DEFAULT_FEEDBACK_PATH, "ab") as f:
-                # Ensure newline separation if needed
-                if len(content) and not content.endswith(b"\n"):
-                    content += b"\n"
-                f.write(content)
-            st.sidebar.success("Appended uploaded feedback to existing file.")
+            if import_action == "Replace":
+                if not confirm_replace:
+                    st.sidebar.warning("Check 'Confirm replace (destructive)' to overwrite existing feedback.jsonl.")
+                else:
+                    with open(DEFAULT_FEEDBACK_PATH, "wb") as f:
+                        f.write(normalized)
+                    st.sidebar.success(f"Replaced feedback.jsonl with {info.get('valid', 0)} records.")
+            else:
+                # Append mode: ensure file ends with newline before appending normalized JSONL
+                needs_nl = False
+                if os.path.exists(DEFAULT_FEEDBACK_PATH) and os.path.getsize(DEFAULT_FEEDBACK_PATH) > 0:
+                    with open(DEFAULT_FEEDBACK_PATH, "rb") as rf:
+                        try:
+                            rf.seek(-1, os.SEEK_END)
+                            needs_nl = rf.read(1) != b"\n"
+                        except Exception:
+                            needs_nl = True
+                with open(DEFAULT_FEEDBACK_PATH, "ab") as f:
+                    if needs_nl:
+                        f.write(b"\n")
+                    f.write(normalized)
+                st.sidebar.success(f"Appended {info.get('valid', 0)} records to feedback.jsonl.")
     except Exception as e:
         st.sidebar.error(f"Failed to import feedback: {e}")
 
