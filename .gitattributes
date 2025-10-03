@@ -1,1 +1,15 @@
+# Git LFS tracking rules for CyberMoE
+# Track large/binary artifacts so they don't bloat the repo history
+
+# Model checkpoints and binaries
+*.pt filter=lfs diff=lfs merge=lfs -text
+*.pth filter=lfs diff=lfs merge=lfs -text
+*.bin filter=lfs diff=lfs merge=lfs -text
+*.ckpt filter=lfs diff=lfs merge=lfs -text
+*.onnx filter=lfs diff=lfs merge=lfs -text
+checkpoints/** filter=lfs diff=lfs merge=lfs -text
+# Datasets and logs that can grow large
+*.csv filter=lfs diff=lfs merge=lfs -text
+*.jsonl filter=lfs diff=lfs merge=lfs -text
+data/** filter=lfs diff=lfs merge=lfs -text
 checkpoints/cybermoe_finetuned.pt filter=lfs diff=lfs merge=lfs -text
