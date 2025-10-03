@@ -9,7 +9,7 @@
 ![GitHub last commit](https://img.shields.io/github/last-commit/guerilla7/CyberMoE)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue)
 
-This project provides a minimal, educational implementation of a sparse **Mixture-of-Experts (MoE)** model. It is designed to demonstrate the core concepts of MoE within a cybersecurity context, showcasing how domain-specific routing can improve model efficiency and interpretability.
+This project provides a minimal, educational implementation of a sparse **Mixture-of-Experts (MoE)** model. It is designed to demonstrate the core concepts of MoE within a cybersecurity context, s[...]  
 
 This repository contains two main components:
 1.  A command-line script (`CyberMoe.py`) that trains the model and runs inference on a predefined set of examples.
@@ -45,14 +45,14 @@ This script is a hands-on demonstration of a modern MoE architecture:
 1.  **Shared Encoder**: A single `distilbert-base-uncased` model from HuggingFace processes the input text into numerical representations.
 2.  **Specialized Experts**: Five simple neural networks act as classifiers for five distinct (simulated) domains: "Network", "Malware", "Phishing", "Cloud Security", and "Web App Security".
 3.  **Gating Network**: A small network that analyzes the encoded text and assigns a relevance score to each expert.
-4.  **Sparse Routing (Top-K)**: To demonstrate efficiency, the model only **activates the Top-K (K=2)** most relevant experts for any given input. The output of the non-selected expert is skipped for computational savings.
+4.  **Sparse Routing (Top-K)**: To demonstrate efficiency, the model only **activates the Top-K (K=2)** most relevant experts for any given input. The output of the non-selected expert is skipped [...]  
 
 ## How It Works
 
 The script's main function, `train_demo()`, performs two phases:
 
-1.  **Synthetic Training**: First, it trains the MoE model on a "themed" synthetic dataset. It generates sentences with specific keywords (e.g., "IP address," "malware," "email") to teach the gating network to route inputs to the correct experts.
-2.  **Inference**: After the brief training phase, it runs inference on a sample of five security-themed sentences. The output clearly shows the model's final prediction, the gating network's routing, and which experts were activated.
+1.  **Synthetic Training**: First, it trains the MoE model on a "themed" synthetic dataset. It generates sentences with specific keywords (e.g., "IP address," "malware," "email") to teach the gati[...]  
+2.  **Inference**: After the brief training phase, it runs inference on a sample of five security-themed sentences. The output clearly shows the model's final prediction, the gating network's rout[...]  
 
 ## Setup
 
@@ -74,7 +74,7 @@ This project comes with two ways to run the model:
 
 ### 1. Interactive Web Demo (Recommended)
 
-For the best experience, run the interactive Streamlit demo. This will launch a web page that allows you to input your own text and see the model's analysis in real-time. After entering a sentence, the app will show the expert routing, confidence, and predictions.
+For the best experience, run the interactive Streamlit demo. This will launch a web page that allows you to input your own text and see the model's analysis in real-time. After entering a sentence[...]  
 
 ```bash
 streamlit run app.py
@@ -127,7 +127,7 @@ After running the `CyberMoe.py` script, you will see the training progress follo
 - **`Top-2 experts`**: The experts that were selected for activation based on the gating scores.
 - **`Expert Logits (shows sparse activation)`**: This is the most important part for understanding the MoE's efficiency.
     - `ACTIVATED`: The model computed the output for the "Network" and "Phishing" experts. You can see their raw output scores (logits).
-    - `SKIPPED`: The "Malware" expert was deemed irrelevant by the gating network, so its logits are `[0. 0.]`, meaning it was **not computed**. This demonstrates the computational savings of sparse routing.
+    - `SKIPPED`: The "Malware" expert was deemed irrelevant by the gating network, so its logits are `[0. 0.]`, meaning it was **not computed**. This demonstrates the computational savings of spa[...]  
 
 ## Data Files Required for Testing
 
@@ -169,7 +169,7 @@ You can also export/import `feedback.jsonl` via the sidebar:
 
 ## Large Files and Git LFS
 
-This repo uses Git LFS to store large artifacts like model checkpoints and some datasets. The patterns are configured in `.gitattributes` (e.g., `checkpoints/**`, `data/**`, `*.pt`, `*.csv`, `*.jsonl`).
+This repo uses Git LFS to store large artifacts like model checkpoints and some datasets. The patterns are configured in `.gitattributes` (e.g., `checkpoints/**`, `data/**`, `*.pt`, `*.csv`, `*.[...]`
 
 Quick start for collaborators:
 
@@ -208,8 +208,8 @@ Tips:
     - If you just pulled from Git, ensure LFS pulled the binary instead of a pointer file: `git lfs pull`.
 
 - Feedback upload fails schema check
-    - The uploader expects line-delimited JSON (JSONL). Each line should be a JSON object with at least `user_input` (string) and `user_feedback` (boolean). Optional fields like `pred_label`/`correction` are supported.
-    - Replace mode is destructive and requires the confirmation checkbox.
+    - The uploader expects line-delimited JSON (JSONL). Each line should be a JSON object with at least `user_input` (string) and `user_feedback` (boolean). Optional fields like `pred_label`/`cor[...]  
+- Replace mode is destructive and requires the confirmation checkbox.
 
 - Graphviz diagram not rendering
     - The app uses `st.graphviz_chart`. The Python `graphviz` package is included, but some systems also need the Graphviz system binary.
@@ -225,6 +225,13 @@ Tips:
 - Streamlit port already in use
     - Run on a different port: `streamlit run app.py --server.port=8502`
 
+## To Do
+
+- [ ] Improve UI/UX
+- [ ] Add real-world datasets for each Expert Network
+- [ ] Pluggable MoE Architecture: The ability for users to configure and use a Small Language Model of choice for their Expert Networks
+- [ ] Improve and/or optimize Gating Network behavior
+
 ## Further Reading & Research
 
 Here are some pioneering and relevant research papers on Mixture-of-Experts (MoE) neural network architectures and their applications, including in cybersecurity:
@@ -235,5 +242,5 @@ Here are some pioneering and relevant research papers on Mixture-of-Experts (MoE
 - **Fedus et al. (2022) – “Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity”**  
   [arXiv:2101.03961](https://arxiv.org/abs/2101.03961) – Shows how simple MoE routing enables massive scale and efficiency in NLP models.
 
-- **Zoph et al. (2022) - "ST-MoE: Designing Stable and Transferable Sparse Expert Models"**
-  [arXiv:2202.08906](https://arxiv.org/abs/2202.08906) - Introduces design principles, such as the router z-loss, to solve the training instability and poor fine-tuning performance of sparse Mixture-of-Experts models, enabling the creation of a state-of-the-art 269B parameter model.
+- **Zoph et al. (2022) - "ST-MoE: Designing Stable and Transferable Sparse Expert Models"**  
+  [arXiv:2202.08906](https://arxiv.org/abs/2202.08906) - Introduces design principles, such as the router z-loss, to solve the training instability and poor fine-tuning performance of sparse Mixt[...]
