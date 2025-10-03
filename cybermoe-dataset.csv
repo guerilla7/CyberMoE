@@ -1,0 +1,21 @@
+text,domain,label
+"Suspicious login attempt from unknown IP address",Network,malicious
+"Normal user activity: accessing internal portal",Network,benign
+"Firewall detected port scan from external host",Network,malicious
+"User connected to VPN",Network,benign
+"Malware sample shows code injection in system DLL",Malware,malicious
+"Antivirus scan completed, no threats found",Malware,benign
+"Ransomware detected encrypting files",Malware,malicious
+"Software update installed successfully",Malware,benign
+"Phishing email with malicious attachment detected",Phishing,malicious
+"Welcome to our newsletter!",Phishing,benign
+"Fake password reset request received",Phishing,malicious
+"User unsubscribed from mailing list",Phishing,benign
+"Unusual IAM role assumption in AWS",Cloud,malicious
+"Cloud backup completed",Cloud,benign
+"Unauthorized access to cloud storage detected",Cloud,malicious
+"Scheduled cloud resource scaling executed",Cloud,benign
+"Potential SQL injection attack detected in web server logs",Web App,malicious
+"User updated profile information",Web App,benign
+"Cross-site scripting attempt blocked",Web App,malicious
+"Successful login to web application",Web App,benign

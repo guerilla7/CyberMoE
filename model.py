@@ -14,6 +14,7 @@ import torch.nn as nn
 from transformers import AutoTokenizer, AutoModel
 import random
 from sklearn.metrics import accuracy_score, confusion_matrix
+from datasets import load_dataset
 
 # --------------------------------------------------------------------------- #
 # Hyper‑parameters & constants
@@ -48,14 +49,47 @@ class Expert(nn.Module):
 # --------------------------------------------------------------------------- #
 class GatingNetwork(nn.Module):
     """
-    Takes the CLS token and outputs a probability distribution over experts.
+    Enhanced gating network that learns richer text representations for expert routing.
+    Uses self-attention over sequence tokens and deeper feature extraction.
     """
     def __init__(self, hidden_size: int, num_experts: int = NUM_EXPERTS):
         super().__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, num_experts)
+        
+        # Multi-head self-attention for sequence-level understanding
+        self.attention = nn.MultiheadAttention(
+            embed_dim=hidden_size,
+            num_heads=8,
+            dropout=0.1,
+            batch_first=True
+        )
+        
+        # Feature extraction network
+        self.feature_net = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size * 2),
+            nn.LayerNorm(hidden_size * 2),
+            nn.GELU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_size * 2, hidden_size * 2),
+            nn.LayerNorm(hidden_size * 2),
+            nn.GELU(),
+            nn.Dropout(0.1)
+        )
+        
+        # Domain-aware context network
+        self.context_net = nn.Sequential(
+            nn.Linear(hidden_size * 2, hidden_size),
+            nn.LayerNorm(hidden_size),
+            nn.GELU(),
+            nn.Dropout(0.1)
+        )
+        
+        # Expert routing head
+        self.routing_head = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size // 2),
+            nn.LayerNorm(hidden_size // 2),
+            nn.GELU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_size // 2, num_experts)
         )
 
     def forward(self, hidden_state: torch.Tensor) -> torch.Tensor:
@@ -63,8 +97,22 @@ class GatingNetwork(nn.Module):
         :param hidden_state: (batch, seq_len, hidden_size)
         :return: probs over experts of shape (batch, num_experts)
         """
-        cls_token = hidden_state[:, 0, :]
-        logits    = self.mlp(cls_token)
+        # Apply self-attention over the sequence
+        attn_output, _ = self.attention(hidden_state, hidden_state, hidden_state)
+        
+        # Global sequence representation (mean pooling)
+        sequence_repr = attn_output.mean(dim=1)  # (batch, hidden_size)
+        
+        # Extract rich features
+        features = self.feature_net(sequence_repr)  # (batch, hidden_size * 2)
+        
+        # Learn domain-aware context
+        context = self.context_net(features)  # (batch, hidden_size)
+        
+        # Generate expert routing probabilities
+        logits = self.routing_head(context)  # (batch, num_experts)
+        return torch.softmax(logits, dim=-1)
+        logits = self.mlp(x)
         return torch.softmax(logits, dim=-1)
 
 # --------------------------------------------------------------------------- #
@@ -80,30 +128,31 @@ class CyberMoE(nn.Module):
                  top_k: int = 2):
         super().__init__()
         self.top_k = top_k
-
-        # Shared encoder & tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
         self.encoder   = AutoModel.from_pretrained("bert-base-uncased")
-
         hidden_size = self.encoder.config.hidden_size
-
-        # Sub‑components
         self.gating_net = GatingNetwork(hidden_size, num_experts)
-        self.experts    = nn.ModuleList(
+        self.experts = nn.ModuleList(
             [Expert(hidden_size, expert_labels) for _ in range(num_experts)]
         )
-        # The FusionNetwork has been removed for a sparse implementation
+        
+        # Domain prediction head for auxiliary task
+        self.domain_head = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size // 2),
+            nn.LayerNorm(hidden_size // 2),
+            nn.GELU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_size // 2, 5)  # 5 domains
+        )
 
-    # ----------------------------------------------------------------------- #
-    def forward(self, texts: list[str]) -> tuple[torch.Tensor,
-                                                torch.Tensor,
-                                                torch.Tensor]:
+    def forward(self, texts: list[str]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         :param texts: list of raw strings (batch)
         :return:
             final_logits  – (batch, expert_labels)   -> final decision
             gating_probs  – (batch, num_experts)     -> raw gating probabilities
             expert_logits – (batch, num_experts, expert_labels) -> (sparse) logits from experts
+            domain_logits – (batch, num_domains)     -> domain predictions
         """
         # Tokenisation
         inputs = self.tokenizer(
@@ -114,6 +163,10 @@ class CyberMoE(nn.Module):
         hidden_state = self.encoder(
             input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"]
         ).last_hidden_state
+
+        # Domain prediction
+        cls_token = hidden_state[:, 0, :]
+        domain_logits = self.domain_head(cls_token)  # (batch, num_domains)
 
         # Gating: get probabilities for all experts
         gating_probs = self.gating_net(hidden_state)  # (batch, num_experts)
@@ -155,7 +208,7 @@ class CyberMoE(nn.Module):
             
             final_logits[i] = item_final_logit
 
-        return final_logits, gating_probs, expert_logits
+        return final_logits, gating_probs, expert_logits, domain_logits
 
     def explain_gating(self, text: str, target_expert_idx: int):
         """
@@ -197,78 +250,38 @@ class CyberMoE(nn.Module):
 
 def train_model(progress_callback=None, weighted_loss=True, aux_loss_weight=1e-2, top_k=2):
     """
-    Very small training demo on synthetic data.
-    In practice you would use real labeled logs, malware samples,
-    phishing emails, etc.  Each domain expert should be fine‑tuned
-    on its own data first.
+    Training demo on a real-world dataset.
     """
     
-    # More realistic synthetic dataset with themed keywords
-    class DummyDataset(torch.utils.data.Dataset):
-        def __init__(self, num_samples=2000):
-            self.texts = []
-            self.labels = []
-
-            themes = {
-                "Network": [
-                    "Suspicious traffic detected from IP address {keyword1}",
-                    "Firewall blocked connection to {keyword1} on port {keyword2}",
-                    "Multiple failed login attempts from {keyword1}"
-                ],
-                "Malware": [
-                    "A new malware variant, {keyword1}, was found on the system",
-                    "Detected a trojan attempting to inject into {keyword2}",
-                    "The virus {keyword1} is spreading through email attachments"
-                ],
-                "Phishing": [
-                    "A phishing email with the subject '{keyword1}' was detected",
-                    "User clicked on a malicious link in an email about {keyword2}",
-                    "Please reset your password for your {keyword1} account"
-                ],
-                "Cloud Security": [
-                    "Unauthorized access to S3 bucket {keyword1} detected",
-                    "IAM role {keyword1} has been granted excessive permissions",
-                    "Security group {keyword2} is open to the world"
-                ],
-                "Web App Security": [
-                    "Potential SQL injection attack detected on the login page with user '{keyword1}'",
-                    "Cross-site scripting (XSS) vulnerability found in the search bar: {keyword2}",
-                    "A CSRF token mismatch was detected for user {keyword1}"
-                ],
-                "Benign": [
-                    "User {keyword1} successfully logged into the internal portal",
-                    "Scheduled task {keyword2} completed successfully",
-                    "Accessing file {keyword1} from the shared drive"
-                ]
-            }
-
-            for _ in range(num_samples):
-                theme_name = random.choice(list(themes.keys()))
-                template = random.choice(themes[theme_name])
-                
-                # This is a simplified way to get some keywords. 
-                # In a real scenario, you would have better keyword lists.
-                keyword1 = random.choice(["user123", "admin", "test.exe", "/api/v1/users", "prod-db"])
-                keyword2 = random.choice(["8080", "443", "/etc/passwd", "confidential.pdf", "backup.zip"])
-
-                self.texts.append(template.format(keyword1=keyword1, keyword2=keyword2))
-                
-                label = 1 if theme_name != "Benign" else 0
-                self.labels.append(label)
-
-        def __len__(self):
-            return len(self.texts)
-
-        def __getitem__(self, idx):
-            return self.texts[idx], self.labels[idx]
+    # Load the dataset from Hugging Face
+    dataset = load_dataset("csv", data_files="cybermoe-dataset.csv")["train"]
 
     # Collate function that returns a list of strings and a tensor of labels
     def collate_fn(batch):
-        texts, labels = zip(*batch)
-        return list(texts), torch.tensor(labels, dtype=torch.long)
+        # The dataset has 'text', 'domain', and 'label' columns.
+        texts = [item['text'] for item in batch if item['text']]
+        label_map = {'benign': 0, 'malicious': 1}
+        domain_list = ['Network', 'Malware', 'Phishing', 'Cloud', 'Web App']
+        domain_map = {d: i for i, d in enumerate(domain_list)}
+        labels = []
+        domains = []
+        for item in batch:
+            if item['text']:
+                label = item['label']
+                if isinstance(label, str):
+                    label = label_map.get(label, 0)
+                labels.append(label)
+                domain = item.get('domain', 'Network')
+                domain_onehot = [0] * len(domain_list)
+                if domain in domain_map:
+                    domain_onehot[domain_map[domain]] = 1
+                domains.append(domain_onehot)
+        # Debug print to catch unexpected label types
+        if any(isinstance(l, str) for l in labels):
+            print('Label conversion error:', labels)
+        return texts, torch.tensor(labels, dtype=torch.long), torch.tensor(domains, dtype=torch.float)
 
-    dataset = DummyDataset()
-    loader   = torch.utils.data.DataLoader(
+    loader = torch.utils.data.DataLoader(
         dataset, batch_size=16, shuffle=True, collate_fn=collate_fn
     )
 
@@ -290,12 +303,16 @@ def train_model(progress_callback=None, weighted_loss=True, aux_loss_weight=1e-2
         total_loss = 0.0
         all_preds = []
         all_labels = []
-        for i, (texts, labels) in enumerate(loader):
+        for i, (texts, labels, domain_features) in enumerate(loader):
             optimizer.zero_grad()
-            logits, gating_probs, _ = model(texts)
+            logits, gating_probs, _, domain_pred = model(texts)
             
             # Main classification loss
             loss = criterion(logits, labels.to(DEVICE))
+            
+            # Domain prediction loss
+            domain_loss = nn.CrossEntropyLoss()(domain_pred, domain_features.to(DEVICE).argmax(dim=1))
+            loss = loss + 0.1 * domain_loss
             
             # Auxiliary load balancing loss
             if aux_loss_weight > 0:
@@ -324,3 +341,14 @@ def train_model(progress_callback=None, weighted_loss=True, aux_loss_weight=1e-2
         progress_callback(1.0)
 
     return model
+
+# Example: default to 'Network' domain, or let user select domain from UI
+# Example usage (uncomment to test):
+# domain_list = ['Network', 'Malware', 'Phishing', 'Cloud', 'Web App']
+# domain_map = {d: i for i, d in enumerate(domain_list)}
+# user_domain = 'Network'
+# domain_onehot = [0] * len(domain_list)
+# domain_onehot[domain_map[user_domain]] = 1
+# domain_features = torch.tensor([domain_onehot], dtype=torch.float)
+# model = train_model()  # Train the model first
+# final_logits, gating_probs, expert_logits = model(['Example input'], domain_features)

@@ -1,0 +1,7 @@
+text,label
+"Your account has been suspended. Click here to verify.",phishing
+"Welcome to our newsletter!",benign
+"Update your password immediately.",phishing
+"Your invoice is attached.",benign
+"Urgent: Your bank account is compromised.",phishing
+"Thank you for your purchase.",benign

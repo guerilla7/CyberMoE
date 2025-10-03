@@ -128,17 +128,19 @@ expert_names = ["Network", "Malware", "Phishing", "Cloud Security", "Web App Sec
 # --- Input Area ---
 st.header("Analyze a Security Event")
 
+
 user_input = st.text_area(
     "Enter a sentence to classify:", 
     "Suspicious login attempt from unknown IP address",
     height=100
 )
 
+
 if st.button("Analyze", use_container_width=True):
     if user_input:
         with torch.no_grad():
-            final_logits, gating_probs, expert_logits = model([user_input])
-        st.session_state.analysis_results = (final_logits, gating_probs, expert_logits)
+            final_logits, gating_probs, expert_logits, domain_pred = model([user_input])
+        st.session_state.analysis_results = (final_logits, gating_probs, expert_logits, domain_pred)
         st.session_state.user_input_for_analysis = user_input
     else:
         st.warning("Please enter some text to analyze.")
@@ -146,7 +148,7 @@ if st.button("Analyze", use_container_width=True):
             del st.session_state.analysis_results
 
 if 'analysis_results' in st.session_state:
-    final_logits, gating_probs, expert_logits = st.session_state.analysis_results
+    final_logits, gating_probs, expert_logits, domain_pred = st.session_state.analysis_results
     # --- Results Display ---
     st.header("Analysis Results")
 
@@ -160,6 +162,11 @@ if 'analysis_results' in st.session_state:
         pred_text = "Malicious" if pred_label == 1 else "Benign"
         
         st.metric(label="Classification", value=pred_text, delta=f"{probs[pred_label]:.2%} confidence")
+        
+        # Display predicted domain
+        domain_probs = torch.softmax(domain_pred, dim=-1)[0]
+        predicted_domain = expert_names[domain_probs.argmax()]
+        st.metric(label="Predicted Domain", value=predicted_domain, delta=f"{domain_probs.max():.2%} confidence")
         
         st.subheader("Gating Network Scores")
         st.write("The gating network decides which expert is most relevant. Higher is better.")

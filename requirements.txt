@@ -2,3 +2,4 @@ torch
 transformers
 streamlit
 scikit-learn
+datasets
