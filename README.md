@@ -235,5 +235,5 @@ Here are some pioneering and relevant research papers on Mixture-of-Experts (MoE
 - **Fedus et al. (2022) – “Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity”**  
   [arXiv:2101.03961](https://arxiv.org/abs/2101.03961) – Shows how simple MoE routing enables massive scale and efficiency in NLP models.
 
-- **Gururangan et al. (2022) – “Mixture-of-Experts for Knowledge-Intensive NLP Tasks”**  
-  [arXiv:2202.08906](https://arxiv.org/abs/2202.08906) – Explores MoE’s effectiveness in tasks requiring specialized domain knowledge.
+- **Zoph et al. (2022) - "ST-MoE: Designing Stable and Transferable Sparse Expert Models"**
+  [arXiv:2202.08906](https://arxiv.org/abs/2202.08906) - Introduces design principles, such as the router z-loss, to solve the training instability and poor fine-tuning performance of sparse Mixture-of-Experts models, enabling the creation of a state-of-the-art 269B parameter model.
