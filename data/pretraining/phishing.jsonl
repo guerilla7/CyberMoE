@@ -1,0 +1,10 @@
+{"text": "Suspicious login page mimicking Microsoft Office 365 detected at hxxp://office365-login.net", "label": 1}
+{"text": "Email security filters updated with latest phishing patterns", "label": 0}
+{"text": "Mass email campaign with suspicious attachments from spoofed domain", "label": 1}
+{"text": "Security awareness training completion report generated", "label": 0}
+{"text": "Credential harvesting form detected at fake banking portal", "label": 1}
+{"text": "DMARC policy verification passed for incoming emails", "label": 0}
+{"text": "Spear-phishing attempt targeting C-level executives", "label": 1}
+{"text": "SPF record validation successful for outbound mail server", "label": 0}
+{"text": "Social engineering attempt via fake password reset link", "label": 1}
+{"text": "Email authentication protocols working as expected", "label": 0}

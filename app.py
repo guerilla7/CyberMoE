@@ -10,13 +10,14 @@ import streamlit as st
 import torch
 import pandas as pd
 from model import train_model, CyberMoE, NUM_EXPERTS
+from preprocessor import CyberPreprocessor
 
 # --------------------------------------------------------------------------- #
 # Model Loading (with caching)
 # --------------------------------------------------------------------------- #
 
 @st.cache_resource
-def load_model(weighted_loss, aux_loss_weight, top_k):
+def load_model(weighted_loss, aux_loss_weight, top_k, use_pretraining):
     """Trains the model and caches it for future runs."""
     progress_bar = st.progress(0, text="Training model, please wait...")
     def update_progress(fraction):
@@ -26,7 +27,10 @@ def load_model(weighted_loss, aux_loss_weight, top_k):
         progress_callback=update_progress, 
         weighted_loss=weighted_loss, 
         aux_loss_weight=aux_loss_weight,
-        top_k=top_k
+        top_k=top_k,
+        pretrain_experts=use_pretraining,
+        pretrain_epochs=5,
+        pretrain_lr=1e-4
     )
     model.eval() # Set to inference mode
     progress_bar.empty()
@@ -112,6 +116,14 @@ aux_loss_weight = st.sidebar.number_input(
     disabled=not use_aux_loss
 )
 
+# Pre-training control
+use_pretraining = st.sidebar.checkbox("Use Expert Pre-training", value=True)
+if use_pretraining:
+    st.sidebar.markdown(
+        """ℹ️ Pre-training helps each expert develop domain-specific knowledge
+        before joint training. This can improve specialization and accuracy."""
+    )
+
 if not use_aux_loss:
     aux_loss_weight = 0.0
 
@@ -122,12 +134,15 @@ if st.sidebar.button("Restart Demo (retrain model)"):
     st.rerun()
 
 # Load the model
-model = load_model(use_weighted_loss, aux_loss_weight, top_k)
+model = load_model(use_weighted_loss, aux_loss_weight, top_k, use_pretraining)
 expert_names = ["Network", "Malware", "Phishing", "Cloud Security", "Web App Security"]
 
 # --- Input Area ---
 st.header("Analyze a Security Event")
 
+
+# Initialize preprocessor
+preprocessor = CyberPreprocessor()
 
 user_input = st.text_area(
     "Enter a sentence to classify:", 
@@ -138,8 +153,16 @@ user_input = st.text_area(
 
 if st.button("Analyze", use_container_width=True):
     if user_input:
+        # Extract technical features
+        preprocessed = preprocessor.process(user_input)
+        st.session_state.preprocessed = preprocessed
+        
         with torch.no_grad():
-            final_logits, gating_probs, expert_logits, domain_pred = model([user_input])
+            outputs = model([user_input])
+            final_logits = outputs['logits']
+            gating_probs = outputs['routing_probs']
+            expert_logits = outputs['expert_outputs']
+            domain_pred = outputs['domain_logits']
         st.session_state.analysis_results = (final_logits, gating_probs, expert_logits, domain_pred)
         st.session_state.user_input_for_analysis = user_input
     else:
@@ -176,8 +199,37 @@ if 'analysis_results' in st.session_state:
         })
         st.bar_chart(gating_df, x="Expert", y="Score")
 
-    # --- Column 2: Expert Activation ---
+    # --- Column 2: Technical Analysis ---
     with col2:
+        st.subheader("🔍 Technical Features")
+        if 'preprocessed' in st.session_state:
+            features = st.session_state.preprocessed['features']
+            
+            # Create a clean display of detected features
+            feature_data = []
+            for feature_type, items in features.items():
+                if items:  # Only show non-empty features
+                    feature_data.append({
+                        "Type": feature_type.upper(),
+                        "Count": len(items),
+                        "Values": ", ".join(items)
+                    })
+            
+            if feature_data:
+                feature_df = pd.DataFrame(feature_data)
+                st.dataframe(feature_df, use_container_width=True)
+            else:
+                st.info("No technical features detected in input text")
+            
+            # Show domain relevance scores
+            st.subheader("📊 Domain Relevance Scores")
+            domain_scores = st.session_state.preprocessed['domain_scores'].numpy()
+            domain_score_df = pd.DataFrame({
+                "Domain": expert_names,
+                "Relevance Score": domain_scores
+            })
+            st.bar_chart(domain_score_df.set_index("Domain"))
+        
         st.subheader(f"Sparse Activation (Top-{top_k} Experts)")
         st.write("Only the most relevant experts are used to save computation.")
 

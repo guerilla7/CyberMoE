@@ -1,257 +1,368 @@
 #!/usr/bin/env python3
 """
-CyberMoE – Minimal Mixture‑of‑Experts for Adaptive Cybersecurity
+CyberMoE - Minimal Mixture-of-Experts for Adaptive Cybersecurity
 
 Author:  Ron F. Del Rosario
-Date:    2025‑09‑11
+Date:    2025-09-12
 """
 
-# --------------------------------------------------------------------------- #
-# Imports – only PyTorch and HuggingFace Transformers are required.
-# --------------------------------------------------------------------------- #
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from typing import List, Dict, Tuple
 from transformers import AutoTokenizer, AutoModel
-import random
-from sklearn.metrics import accuracy_score, confusion_matrix
 from datasets import load_dataset
 
-# --------------------------------------------------------------------------- #
-# Hyper‑parameters & constants
-# --------------------------------------------------------------------------- #
-NUM_EXPERTS   = 5          # Network, Malware, Phishing, Cloud, Web App
-EXPERT_LABELS = 2          # 0 – benign, 1 – malicious
-DEVICE        = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Constants
+NUM_EXPERTS = 5
+EXPERT_LABELS = 2  # Binary classification (benign/malicious)
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# --------------------------------------------------------------------------- #
-# 1️⃣ Expert – a tiny head that turns the CLS token into logits
-# --------------------------------------------------------------------------- #
-class Expert(nn.Module):
-    """
-    A single expert head.
-    In a real system this would be a full LLM (e.g., GPT‑4) fine‑tuned on
-    its domain.  Here we keep it lightweight for demo purposes.
-    """
-    def __init__(self, hidden_size: int, num_labels: int = EXPERT_LABELS):
-        super().__init__()
-        self.classifier = nn.Linear(hidden_size, num_labels)
-
-    def forward(self, hidden_state: torch.Tensor) -> torch.Tensor:
-        """
-        :param hidden_state: (batch, seq_len, hidden_size) from the shared encoder
-        :return: logits of shape (batch, num_labels)
-        """
-        cls_token = hidden_state[:, 0, :]          # CLS token
-        return self.classifier(cls_token)           # (batch, num_labels)
-
-# --------------------------------------------------------------------------- #
-# 2️⃣ Gating Network – decides which experts to trust
-# --------------------------------------------------------------------------- #
 class GatingNetwork(nn.Module):
     """
-    Enhanced gating network that learns richer text representations for expert routing.
-    Uses self-attention over sequence tokens and deeper feature extraction.
+    Hierarchical attention-based gating network for expert routing.
     """
-    def __init__(self, hidden_size: int, num_experts: int = NUM_EXPERTS):
+    def __init__(self, hidden_size: int, num_experts: int):
         super().__init__()
+        self.hidden_size = hidden_size
+        self.num_experts = num_experts
         
-        # Multi-head self-attention for sequence-level understanding
-        self.attention = nn.MultiheadAttention(
-            embed_dim=hidden_size,
-            num_heads=8,
-            dropout=0.1,
-            batch_first=True
+        # Token-level attention
+        self.token_query = nn.Linear(hidden_size, hidden_size)
+        self.token_key = nn.Linear(hidden_size, hidden_size)
+        self.token_value = nn.Linear(hidden_size, hidden_size)
+        
+        # Expert routing layers
+        self.expert_attention = nn.Linear(hidden_size, num_experts)
+        self.expert_gate = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size),
+            nn.GELU(),
+            nn.Linear(hidden_size, num_experts)
         )
         
-        # Feature extraction network
-        self.feature_net = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size * 2),
-            nn.LayerNorm(hidden_size * 2),
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        """
+        :param hidden_states: Tensor of shape (batch_size, seq_len, hidden_size)
+        :return: Expert routing probabilities of shape (batch_size, num_experts)
+        """
+        # Token-level self-attention
+        Q = self.token_query(hidden_states)
+        K = self.token_key(hidden_states)
+        V = self.token_value(hidden_states)
+        
+        attention_scores = torch.matmul(Q, K.transpose(-2, -1)) / torch.sqrt(
+            torch.tensor(self.hidden_size, dtype=torch.float32)
+        )
+        attention_probs = F.softmax(attention_scores, dim=-1)
+        token_context = torch.matmul(attention_probs, V)
+        
+        # Sequence pooling
+        sequence_repr = token_context.mean(dim=1)
+        
+        # Expert routing scores
+        expert_attention = self.expert_attention(sequence_repr)
+        expert_logits = self.expert_gate(sequence_repr)
+        
+        # Combine attention and gate scores
+        routing_logits = expert_attention + expert_logits
+        routing_probs = F.softmax(routing_logits, dim=-1)
+        
+        return routing_probs
+
+class Expert(nn.Module):
+    """Individual expert network"""
+    def __init__(self, hidden_size: int, num_labels: int):
+        super().__init__()
+        self.classifier = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size),
             nn.GELU(),
             nn.Dropout(0.1),
-            nn.Linear(hidden_size * 2, hidden_size * 2),
-            nn.LayerNorm(hidden_size * 2),
-            nn.GELU(),
-            nn.Dropout(0.1)
+            nn.Linear(hidden_size, num_labels)
         )
+    
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        # Ensure we have a batch dimension and properly average sequence dimension
+        if len(hidden_states.shape) == 2:
+            # Add batch dimension if missing
+            hidden_states = hidden_states.unsqueeze(0)
         
-        # Domain-aware context network
-        self.context_net = nn.Sequential(
-            nn.Linear(hidden_size * 2, hidden_size),
-            nn.LayerNorm(hidden_size),
-            nn.GELU(),
-            nn.Dropout(0.1)
-        )
+        # Mean pooling over sequence length dimension
+        pooled = hidden_states.mean(dim=1)
         
-        # Expert routing head
-        self.routing_head = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size // 2),
-            nn.LayerNorm(hidden_size // 2),
-            nn.GELU(),
-            nn.Dropout(0.1),
-            nn.Linear(hidden_size // 2, num_experts)
-        )
+        # Get logits, ensuring shape is [batch_size, num_labels]
+        logits = self.classifier(pooled)
+        
+        return logits
 
-    def forward(self, hidden_state: torch.Tensor) -> torch.Tensor:
+class CyberSecurityEmbeddings(nn.Module):
+    """
+    Enhanced embeddings layer with cybersecurity-specific features.
+    Combines BERT embeddings with technical entity embeddings and domain knowledge.
+    """
+    def __init__(self, base_model_name: str = "bert-base-uncased"):
+        super().__init__()
+        self.tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+        self.base_encoder = AutoModel.from_pretrained(base_model_name)
+        self.hidden_size = self.base_encoder.config.hidden_size
+        
+        # Technical entity type embeddings
+        self.entity_embeddings = nn.Embedding(7, self.hidden_size)  # [PAD, IP, URL, PORT, HASH, CVE, DOMAIN]
+        
+        # Domain-specific token adaptation
+        self.domain_adaptation = nn.ModuleDict({
+            'network': nn.Linear(self.hidden_size, self.hidden_size),
+            'malware': nn.Linear(self.hidden_size, self.hidden_size),
+            'phishing': nn.Linear(self.hidden_size, self.hidden_size),
+            'cloud': nn.Linear(self.hidden_size, self.hidden_size),
+            'webapp': nn.Linear(self.hidden_size, self.hidden_size)
+        })
+        
+        # Output fusion layer
+        self.fusion = nn.Sequential(
+            nn.Linear(self.hidden_size * 2, self.hidden_size),
+            nn.LayerNorm(self.hidden_size),
+            nn.GELU()
+        )
+        
+    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor,
+                entity_types: torch.Tensor, domain_weights: torch.Tensor) -> torch.Tensor:
         """
-        :param hidden_state: (batch, seq_len, hidden_size)
-        :return: probs over experts of shape (batch, num_experts)
+        Forward pass with enhanced embeddings
+        :param input_ids: Token IDs from BERT tokenizer
+        :param attention_mask: Attention mask for padding
+        :param entity_types: Technical entity type IDs for each token
+        :param domain_weights: Domain relevance scores (batch_size, num_domains)
         """
-        # Apply self-attention over the sequence
-        attn_output, _ = self.attention(hidden_state, hidden_state, hidden_state)
+        # Get base BERT embeddings
+        base_outputs = self.base_encoder(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            return_dict=True
+        )
+        base_embeddings = base_outputs.last_hidden_state
         
-        # Global sequence representation (mean pooling)
-        sequence_repr = attn_output.mean(dim=1)  # (batch, hidden_size)
+        # Add technical entity embeddings
+        entity_emb = self.entity_embeddings(entity_types)
         
-        # Extract rich features
-        features = self.feature_net(sequence_repr)  # (batch, hidden_size * 2)
+        # Apply domain-specific adaptations
+        domain_adapted = torch.zeros_like(base_embeddings)
+        batch_size, seq_len, hidden_size = base_embeddings.shape
         
-        # Learn domain-aware context
-        context = self.context_net(features)  # (batch, hidden_size)
+        for i, (domain, adapter) in enumerate(self.domain_adaptation.items()):
+            # Handle domain weights safely - they might have unexpected shape
+            if i < domain_weights.size(1):
+                # Process each batch item separately to avoid broadcasting issues
+                adapted_batch = []
+                # Process each item in the batch
+                for b in range(batch_size):
+                    # Get a single sample's embeddings
+                    sample_embeddings = base_embeddings[b:b+1]  # Keep batch dim as [1, seq, hidden]
+                    # Get adapted features for this sample
+                    sample_adapted = adapter(sample_embeddings)
+                    # Get weight for this domain and sample
+                    sample_weight = domain_weights[b, i].item()
+                    # Apply weight
+                    adapted_batch.append(sample_adapted * sample_weight)
+                
+                # Stack batch back together and add to accumulated adaptations
+                if adapted_batch:
+                    stacked_adaptations = torch.cat(adapted_batch, dim=0)
+                    domain_adapted += stacked_adaptations
         
-        # Generate expert routing probabilities
-        logits = self.routing_head(context)  # (batch, num_experts)
-        return torch.softmax(logits, dim=-1)
-        logits = self.mlp(x)
-        return torch.softmax(logits, dim=-1)
+        # Combine embeddings
+        combined = torch.cat([base_embeddings, domain_adapted], dim=-1)
+        enhanced_embeddings = self.fusion(combined)
+        
+        return enhanced_embeddings
 
-# --------------------------------------------------------------------------- #
-# 3️⃣ CyberMoE – the full model (now with sparse Top-K routing)
-# --------------------------------------------------------------------------- #
 class CyberMoE(nn.Module):
     """
-    A minimal Mixture‑of‑Experts cybersecurity model.
-    This version uses sparse Top-K routing for efficiency.
+    Enhanced Mixture-of-Experts cybersecurity model with domain awareness.
+    Uses custom embeddings and hierarchical attention for better expert routing.
     """
     def __init__(self, num_experts: int = NUM_EXPERTS,
                  expert_labels: int = EXPERT_LABELS,
-                 top_k: int = 2):
+                 top_k: int = 2,
+                 pretrain_experts: bool = True,
+                 pretrain_epochs: int = 5,
+                 pretrain_lr: float = 1e-4,
+                 pretrain_batch_size: int = 32):
         super().__init__()
         self.top_k = top_k
-        self.tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-        self.encoder   = AutoModel.from_pretrained("bert-base-uncased")
-        hidden_size = self.encoder.config.hidden_size
-        self.gating_net = GatingNetwork(hidden_size, num_experts)
-        self.experts = nn.ModuleList(
-            [Expert(hidden_size, expert_labels) for _ in range(num_experts)]
+        
+        # Pre-training configuration
+        self.pretrain_config = {
+            'enabled': pretrain_experts,
+            'epochs': pretrain_epochs,
+            'learning_rate': pretrain_lr,
+            'batch_size': pretrain_batch_size
+        }
+        
+        # Initialize preprocessor for technical feature extraction
+        from preprocessor import CyberPreprocessor
+        self.preprocessor = CyberPreprocessor()
+        
+        # Enhanced embeddings layer
+        self.embeddings = CyberSecurityEmbeddings()
+        hidden_size = self.embeddings.hidden_size
+        
+        # Gating network for expert routing
+        self.gate = GatingNetwork(hidden_size, num_experts)
+        
+        # Expert networks
+        self.experts = nn.ModuleList([
+            Expert(hidden_size, expert_labels)
+            for _ in range(num_experts)
+        ])
+        
+        # Domain classifier
+        self.domain_classifier = nn.Linear(hidden_size, num_experts)
+        
+        self.device = DEVICE
+        self.to(self.device)
+    
+    def forward(self, texts: List[str]) -> Dict[str, torch.Tensor]:
+        """
+        Forward pass with enhanced embeddings
+        :param texts: Batch of input texts
+        :return: Dict with expert outputs and routing probabilities
+        """
+        # Process inputs through preprocessor
+        batch_features = [self.preprocessor.process(text) for text in texts]
+        
+        # Prepare inputs
+        encoded = self.embeddings.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors="pt"
+        )
+        input_ids = encoded["input_ids"].to(self.device)
+        attention_mask = encoded["attention_mask"].to(self.device)
+        
+        # Stack preprocessed features
+        entity_types = torch.stack([f['entity_types'] for f in batch_features]).to(self.device)
+        
+        # Handle domain scores with more careful shape handling
+        # Each item should be [num_domains], stacked to [batch, num_domains]
+        domain_scores_list = []
+        for f in batch_features:
+            ds = f['domain_scores']
+            # Ensure each score is 1D
+            if ds.dim() > 1:
+                ds = ds.view(-1)  # Flatten to 1D
+            domain_scores_list.append(ds)
+            
+        # Stack into batch
+        domain_scores = torch.stack(domain_scores_list).to(self.device)
+        # Ensure shape is [batch_size, num_domains]
+        if domain_scores.dim() > 2:
+            domain_scores = domain_scores.view(len(texts), -1)  # Reshape to [batch, domains]
+        
+        # Get enhanced embeddings
+        hidden_states = self.embeddings(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            entity_types=entity_types,
+            domain_weights=domain_scores
         )
         
-        # Domain prediction head for auxiliary task
-        self.domain_head = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size // 2),
-            nn.LayerNorm(hidden_size // 2),
-            nn.GELU(),
-            nn.Dropout(0.1),
-            nn.Linear(hidden_size // 2, 5)  # 5 domains
-        )
-
-    def forward(self, texts: list[str]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        :param texts: list of raw strings (batch)
-        :return:
-            final_logits  – (batch, expert_labels)   -> final decision
-            gating_probs  – (batch, num_experts)     -> raw gating probabilities
-            expert_logits – (batch, num_experts, expert_labels) -> (sparse) logits from experts
-            domain_logits – (batch, num_domains)     -> domain predictions
-        """
-        # Tokenisation
-        inputs = self.tokenizer(
-            texts, padding=True, truncation=True, return_tensors="pt"
-        ).to(DEVICE)
-
-        # Shared encoder
-        hidden_state = self.encoder(
-            input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"]
-        ).last_hidden_state
-
+        # Get routing probabilities
+        routing_probs = self.gate(hidden_states)
+        
+        # Get top-k experts
+        top_k_scores, top_k_indices = torch.topk(routing_probs, self.top_k, dim=-1)
+        top_k_scores = top_k_scores / top_k_scores.sum(dim=-1, keepdim=True)
+        
+        # Get predictions from top-k experts
+        expert_outputs = []
+        for i in range(routing_probs.size(0)):  # For each item in batch
+            batch_outputs = []
+            for j in range(NUM_EXPERTS):
+                if j in top_k_indices[i]:
+                    expert_idx = j
+                    # Expert returns [1, EXPERT_LABELS]; squeeze batch dim -> [EXPERT_LABELS]
+                    expert_output = self.experts[expert_idx](hidden_states[i:i+1]).squeeze(0)
+                else:
+                    # Zero logits for skipped experts -> [EXPERT_LABELS]
+                    expert_output = torch.zeros(
+                        EXPERT_LABELS,
+                        device=self.device
+                    )
+                batch_outputs.append(expert_output)  # [EXPERT_LABELS]
+            # Stack experts for this sample -> [NUM_EXPERTS, EXPERT_LABELS]
+            expert_outputs.append(torch.stack(batch_outputs))
+        # Stack batch -> [B, NUM_EXPERTS, EXPERT_LABELS]
+        expert_outputs = torch.stack(expert_outputs)
+        
+        # Weight and combine expert outputs
+        routing_probs_expanded = routing_probs.unsqueeze(-1)  # [B, NUM_EXPERTS, 1]
+        weighted_outputs = expert_outputs * routing_probs_expanded  # [B, NUM_EXPERTS, EXPERT_LABELS]
+        # Sum over experts -> [B, EXPERT_LABELS]
+        final_output = weighted_outputs.sum(dim=1)
+        
         # Domain prediction
-        cls_token = hidden_state[:, 0, :]
-        domain_logits = self.domain_head(cls_token)  # (batch, num_domains)
-
-        # Gating: get probabilities for all experts
-        gating_probs = self.gating_net(hidden_state)  # (batch, num_experts)
-
-        # Routing: select Top-K experts and their probabilities
-        top_k_probs, top_k_indices = torch.topk(gating_probs, self.top_k, dim=-1)
-
-        # Normalize the probabilities of the top-k experts, so they sum to 1
-        top_k_probs = top_k_probs / torch.sum(top_k_probs, dim=-1, keepdim=True)
-
-        # Initialize tensors to store results
-        batch_size, _, hidden_size = hidden_state.shape
-        final_logits = torch.zeros(batch_size, EXPERT_LABELS).to(DEVICE)
-        # expert_logits is kept to show which experts were activated (it's sparse)
-        expert_logits = torch.zeros(batch_size, NUM_EXPERTS, EXPERT_LABELS).to(DEVICE)
-
-        # Loop over batch items for sparse computation (clearer for demo)
-        for i in range(batch_size):
-            item_hidden_state = hidden_state[i:i+1]
+        domain_logits = self.domain_classifier(hidden_states.mean(dim=1))
+        
+        return {
+            'logits': final_output,
+            'routing_probs': routing_probs,
+            'expert_outputs': expert_outputs,
+            'domain_logits': domain_logits
+        }
+    
+    def explain_gating(self, text: str, expert_idx: int) -> List[Tuple[str, float]]:
+        """
+        Explain which parts of the input influenced the gating decision
+        :param text: Input text to explain
+        :param expert_idx: Index of expert to explain (0-4)
+        :return: List of (token, importance_score) tuples
+        """
+        self.eval()
+        with torch.no_grad():
+            # Tokenize input
+            tokens = self.embeddings.tokenizer.tokenize(text)
+            encoded = self.embeddings.tokenizer(
+                text,
+                return_tensors="pt",
+                padding=True,
+                truncation=True
+            )
+            input_ids = encoded["input_ids"].to(self.device)
+            attention_mask = encoded["attention_mask"].to(self.device)
             
-            # Get the outputs from the top-k experts for this item
-            top_k_expert_outputs = []
-            for j in range(self.top_k):
-                expert_idx = top_k_indices[i, j]
-                expert = self.experts[expert_idx]
-                
-                # Compute and store expert output
-                logit = expert(item_hidden_state)
-                top_k_expert_outputs.append(logit)
-                expert_logits[i, expert_idx] = logit.squeeze(0)
-
-            # Stack the expert outputs for this item
-            item_top_k_logits = torch.cat(top_k_expert_outputs, dim=0) # (top_k, expert_labels)
-
-            # Weight the outputs by the normalized gating probabilities
-            item_final_logit = torch.sum(
-                item_top_k_logits * top_k_probs[i].unsqueeze(-1), dim=0
+            # Get preprocessor features
+            features = self.preprocessor.process(text)
+            entity_types = features['entity_types'].unsqueeze(0).to(self.device)
+            domain_scores = features['domain_scores'].unsqueeze(0).to(self.device)
+            
+            # Get embeddings
+            hidden_states = self.embeddings(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                entity_types=entity_types,
+                domain_weights=domain_scores
             )
             
-            final_logits[i] = item_final_logit
+            # Get attention scores from gating network
+            Q = self.gate.token_query(hidden_states)
+            K = self.gate.token_key(hidden_states)
+            attention_scores = torch.matmul(Q, K.transpose(-2, -1))[0]
+            attention_probs = F.softmax(attention_scores, dim=-1)
+            
+            # Get importance scores for the specified expert
+            expert_attention = self.gate.expert_attention(hidden_states)[0]
+            token_importances = expert_attention[:, expert_idx].cpu().numpy()
+            
+            # Combine token texts with their importance scores
+            token_scores = list(zip(tokens, token_importances))
+            
+            return token_scores
 
-        return final_logits, gating_probs, expert_logits, domain_logits
-
-    def explain_gating(self, text: str, target_expert_idx: int):
-        """
-        Calculates the importance of each word in the input text for the gating
-        decision for a specific expert.
-        """
-        # Tokenize the input text
-        inputs = self.tokenizer(text, return_tensors="pt").to(DEVICE)
-        input_ids = inputs["input_ids"]
-        
-        # Get the word embeddings
-        word_embeddings = self.encoder.embeddings.word_embeddings(input_ids)
-        word_embeddings.retain_grad()
-
-        # Forward pass through the encoder
-        encoder_output = self.encoder(inputs_embeds=word_embeddings)
-        hidden_state = encoder_output.last_hidden_state
-
-        # Gating decision
-        gating_probs = self.gating_net(hidden_state)
-        target_expert_prob = gating_probs[0, target_expert_idx]
-
-        # Calculate gradients
-        target_expert_prob.backward()
-
-        # Get the gradients of the word embeddings
-        word_gradients = word_embeddings.grad.squeeze(0)
-        
-        # Calculate the norm of the gradients for each word
-        word_importances = torch.norm(word_gradients, dim=1)
-        
-        # Normalize the importances
-        word_importances = (word_importances - word_importances.min()) / (word_importances.max() - word_importances.min())
-        
-        # Get the tokens
-        tokens = self.tokenizer.convert_ids_to_tokens(input_ids.squeeze(0))
-        
-        return list(zip(tokens, word_importances.cpu().numpy()))
-
-def train_model(progress_callback=None, weighted_loss=True, aux_loss_weight=1e-2, top_k=2):
-    """
-    Training demo on a real-world dataset.
-    """
+def train_model(progress_callback=None, weighted_loss=True, aux_loss_weight=1e-2, top_k=2,
+             pretrain_experts=True, pretrain_epochs=5, pretrain_lr=1e-4):
+    """Train a new CyberMoE model with optional expert pre-training"""
     
     # Load the dataset from Hugging Face
     dataset = load_dataset("csv", data_files="cybermoe-dataset.csv")["train"]
@@ -267,88 +378,183 @@ def train_model(progress_callback=None, weighted_loss=True, aux_loss_weight=1e-2
         domains = []
         for item in batch:
             if item['text']:
+                # Convert string or numeric labels to integers
                 label = item['label']
                 if isinstance(label, str):
-                    label = label_map.get(label, 0)
-                labels.append(label)
+                    label = label_map.get(label.lower(), 0)  # Handle case insensitively
+                elif isinstance(label, bool):
+                    label = 1 if label else 0
+                labels.append(int(label))  # Ensure integer type
+                
+                # Convert domain to one-hot
                 domain = item.get('domain', 'Network')
                 domain_onehot = [0] * len(domain_list)
                 if domain in domain_map:
                     domain_onehot[domain_map[domain]] = 1
                 domains.append(domain_onehot)
-        # Debug print to catch unexpected label types
-        if any(isinstance(l, str) for l in labels):
-            print('Label conversion error:', labels)
-        return texts, torch.tensor(labels, dtype=torch.long), torch.tensor(domains, dtype=torch.float)
+        
+        # Convert to tensors and move to device
+        label_tensor = torch.tensor(labels, dtype=torch.long).to(DEVICE)
+        domain_tensor = torch.tensor(domains, dtype=torch.float).to(DEVICE)
+        return texts, label_tensor, domain_tensor
 
     loader = torch.utils.data.DataLoader(
         dataset, batch_size=16, shuffle=True, collate_fn=collate_fn
     )
 
-    # Model & optimizer
-    model = CyberMoE(top_k=top_k).to(DEVICE)
+    # Initialize model with pre-training configuration
+    model = CyberMoE(
+        top_k=top_k,
+        pretrain_experts=pretrain_experts,
+        pretrain_epochs=pretrain_epochs,
+        pretrain_lr=pretrain_lr
+    ).to(DEVICE)
+    
+    # Pre-train experts if enabled
+    if pretrain_experts and progress_callback:
+        from pretraining import create_expert_dataloaders, pretrain_expert
+        
+        # Load domain-specific data
+        expert_domains = ['network', 'malware', 'phishing', 'cloud', 'webapp']
+        dataloaders = create_expert_dataloaders(
+            'data/pretraining',
+            expert_domains,
+            model.preprocessor,
+            batch_size=32
+        )
+        
+        # Pre-train each expert
+        pre_progress_start = 0.0
+        pre_progress_per_expert = 0.2  # Reserve 20% for pre-training
+        
+        for i, (domain, loader) in enumerate(dataloaders.items()):
+            expert = model.experts[i]
+            
+            def expert_progress(p):
+                overall_progress = pre_progress_start + (p * pre_progress_per_expert)
+                progress_callback(overall_progress)
+            
+            pretrain_expert(
+                expert,
+                model.embeddings,  # Pass the embeddings layer
+                loader,
+                DEVICE,
+                num_epochs=pretrain_epochs,
+                learning_rate=pretrain_lr,
+                progress_callback=expert_progress
+            )
+            pre_progress_start += pre_progress_per_expert
+    
+    # Model optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
     
     # Weighted loss
     if weighted_loss:
-        # Roughly 5 malicious themes to 1 benign theme
+        # Roughly 5 malicious examples to 1 benign example
         class_weights = torch.tensor([0.6, 3.0]).to(DEVICE)
         criterion = nn.CrossEntropyLoss(weight=class_weights)
     else:
         criterion = nn.CrossEntropyLoss()
 
-    # Training loop (few epochs for demo)
+    # Training loop
     model.train()
     for epoch in range(5):
         total_loss = 0.0
-        all_preds = []
-        all_labels = []
-        for i, (texts, labels, domain_features) in enumerate(loader):
+        for i, (texts, labels, domains) in enumerate(loader):
+            # Ensure labels are tensor and on the right device
+            if not isinstance(labels, torch.Tensor):
+                # Convert to tensor if somehow it's not
+                if isinstance(labels, list):
+                    labels = torch.tensor(labels, dtype=torch.long)
+                elif isinstance(labels, str):
+                    # Convert string label
+                    label_map = {'benign': 0, 'malicious': 1}
+                    label_value = label_map.get(labels.lower(), 0)
+                    labels = torch.tensor([label_value], dtype=torch.long)
+                # Move to device
+                labels = labels.to(DEVICE)
+                
+            # Tensors are already on device from collate_fn
             optimizer.zero_grad()
-            logits, gating_probs, _, domain_pred = model(texts)
+            outputs = model(texts)
             
-            # Main classification loss
-            loss = criterion(logits, labels.to(DEVICE))
+            # Print shapes for debugging
+            logits_shape = outputs['logits'].shape
+            labels_shape = labels.shape
             
-            # Domain prediction loss
-            domain_loss = nn.CrossEntropyLoss()(domain_pred, domain_features.to(DEVICE).argmax(dim=1))
-            loss = loss + 0.1 * domain_loss
+            # Classification loss - ensure shapes are compatible
+            # Cross entropy expects class indices, not one-hot encoded labels
+            if len(labels.shape) == 1 or (len(labels.shape) == 2 and labels.shape[1] == 1):
+                # Labels are already indices, use them directly
+                loss = criterion(outputs['logits'], labels)
+            else:
+                # Handle potential shape mismatch
+                if labels.shape != outputs['logits'].shape:
+                    # If labels are one-hot encoded or different shape, get class indices
+                    if len(labels.shape) > 1 and labels.shape[1] > 1:
+                        labels = labels.argmax(dim=1)  # Convert one-hot to indices
+                    # Check if we have a batch dimension mismatch
+                    if len(labels.shape) == 1 and outputs['logits'].shape[0] > 1:
+                        # Expand labels to match batch size
+                        labels = labels.expand(outputs['logits'].shape[0])
+                    elif len(labels.shape) == 1 and outputs['logits'].shape[0] == 1:
+                        # If single item batch, reshape to match
+                        labels = labels.view(1)
+                loss = criterion(outputs['logits'], labels)
+            
+            # Domain prediction loss: ensure domain targets are LongTensor class indices on DEVICE
+            if isinstance(domains, torch.Tensor):
+                if domains.dim() == 2:
+                    # One-hot or probabilities -> to indices
+                    domain_targets = domains.argmax(dim=1).to(DEVICE)
+                elif domains.dim() == 1:
+                    # Already class indices
+                    domain_targets = domains.to(DEVICE).long()
+                else:
+                    # Unexpected shape; flatten and take indices safely
+                    domain_targets = domains.view(domains.size(0), -1).argmax(dim=1).to(DEVICE)
+            elif isinstance(domains, list):
+                # Could be list of one-hot lists or strings
+                if len(domains) > 0 and isinstance(domains[0], (list, tuple)):
+                    domain_targets = torch.tensor([int(max(range(len(d)), key=lambda k: d[k])) for d in domains], dtype=torch.long, device=DEVICE)
+                else:
+                    domain_map = {'Network': 0, 'Malware': 1, 'Phishing': 2, 'Cloud': 3, 'Web App': 4}
+                    domain_targets = torch.tensor([domain_map.get(str(d), 0) for d in domains], dtype=torch.long, device=DEVICE)
+            elif isinstance(domains, str):
+                domain_map = {'Network': 0, 'Malware': 1, 'Phishing': 2, 'Cloud': 3, 'Web App': 4}
+                idx = domain_map.get(domains, 0)
+                # Match batch size of logits (usually 1 here)
+                batch_sz = outputs['domain_logits'].shape[0]
+                domain_targets = torch.tensor([idx] * batch_sz, dtype=torch.long, device=DEVICE)
+            else:
+                # Fallback to zeros
+                batch_sz = outputs['domain_logits'].shape[0]
+                domain_targets = torch.zeros(batch_sz, dtype=torch.long, device=DEVICE)
+
+            domain_loss = F.cross_entropy(outputs['domain_logits'], domain_targets)
+            loss += domain_loss * 0.1
             
             # Auxiliary load balancing loss
             if aux_loss_weight > 0:
-                mean_gating_probs = torch.mean(gating_probs, dim=0)
-                cv_sq = (torch.std(mean_gating_probs) / torch.mean(mean_gating_probs))**2
-                aux_loss = aux_loss_weight * cv_sq
-                loss += aux_loss
-
+                # Encourage uniform expert utilization
+                routing_probs = outputs['routing_probs']
+                expert_usage = routing_probs.mean(0)
+                target_usage = torch.ones_like(expert_usage) / NUM_EXPERTS
+                aux_loss = F.kl_div(
+                    expert_usage.log(),
+                    target_usage,
+                    reduction='batchmean'
+                )
+                loss += aux_loss_weight * aux_loss
+            
             loss.backward()
             optimizer.step()
+            
             total_loss += loss.item()
-            preds = torch.argmax(logits, dim=1).cpu().numpy()
-            all_preds.extend(preds)
-            all_labels.extend(labels.cpu().numpy())
+            
             if progress_callback:
-                progress_callback((epoch * len(loader) + i) / (5 * len(loader)))
-
-
-        avg_loss = total_loss / len(loader)
-        acc = accuracy_score(all_labels, all_preds)
-        cm = confusion_matrix(all_labels, all_preds)
-        print(f"Epoch {epoch+1} | Loss: {avg_loss:.4f} | Accuracy: {acc:.4f}")
-        print(f"Confusion Matrix:\n{cm}")
+                progress = (epoch + (i + 1) / len(loader)) / 5
+                progress = 0.2 + (progress * 0.8)  # Scale to 20%-100% (after pre-training)
+                progress_callback(progress)
     
-    if progress_callback:
-        progress_callback(1.0)
-
     return model
-
-# Example: default to 'Network' domain, or let user select domain from UI
-# Example usage (uncomment to test):
-# domain_list = ['Network', 'Malware', 'Phishing', 'Cloud', 'Web App']
-# domain_map = {d: i for i, d in enumerate(domain_list)}
-# user_domain = 'Network'
-# domain_onehot = [0] * len(domain_list)
-# domain_onehot[domain_map[user_domain]] = 1
-# domain_features = torch.tensor([domain_onehot], dtype=torch.float)
-# model = train_model()  # Train the model first
-# final_logits, gating_probs, expert_logits = model(['Example input'], domain_features)

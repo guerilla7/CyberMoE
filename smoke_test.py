@@ -1,33 +1,37 @@
-﻿#!/usr/bin/env python3
-"""
-Smoke test that validates the minimal realtime loop:
-reads ./data/cybermoe_input.jsonl produced by consumer and checks presence of expected fields.
-Exits non-zero on failure.
-"""
-import json
-import sys
-from pathlib import Path
+from preprocessor import CyberPreprocessor
 
-INPUT = Path("./data/cybermoe_input.jsonl")
-if not INPUT.exists():
-    print("Missing input queue: ./data/cybermoe_input.jsonl â€” run consumer first", file=sys.stderr)
-    sys.exit(2)
+def test_preprocessor():
+    # Initialize preprocessor
+    preprocessor = CyberPreprocessor()
+    
+    # Test text with various technical features
+    test_text = """
+    Suspicious network traffic detected from IP 192.168.1.100 to malicious domain evil.com on port 443/tcp.
+    The attacker attempted SQL injection at https://target.com/login.php.
+    Malware hash: 5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8
+    CVE-2021-44228 vulnerability exploited in the system.
+    """
+    
+    # Process the text
+    result = preprocessor.process(test_text)
+    
+    # Verify features were extracted
+    assert len(result['features']['ips']) > 0, "Failed to extract IP"
+    assert len(result['features']['urls']) > 0, "Failed to extract URL"
+    assert len(result['features']['ports']) > 0, "Failed to extract port"
+    assert len(result['features']['hashes']) > 0, "Failed to extract hash"
+    assert len(result['features']['cves']) > 0, "Failed to extract CVE"
+    assert len(result['features']['domains']) > 0, "Failed to extract domain"
+    
+    # Verify domain scores
+    assert len(result['domain_scores']) == 5, "Incorrect number of domain scores"
+    assert result['domain_scores'].max() <= 1.0, "Domain score exceeds 1.0"
+    assert result['domain_scores'].min() >= 0.0, "Domain score below 0.0"
+    
+    # Verify entity types
+    assert result['entity_types'].shape == (len(result['tokens']),), "Entity types shape mismatch"
+    
+    print("All tests passed!")
 
-required = {"event_id","ts","source_type","raw","embedding","meta"}
-count = 0
-with INPUT.open() as f:
-    for line in f:
-        try:
-            o = json.loads(line)
-        except Exception as e:
-            print("Invalid JSON:", e, file=sys.stderr)
-            sys.exit(3)
-        if not required.issubset(set(o.keys())):
-            print("Missing required keys in envelope:", set(o.keys()), file=sys.stderr)
-            sys.exit(4)
-        count += 1
-if count == 0:
-    print("No events found in queue", file=sys.stderr)
-    sys.exit(5)
-print(f"Smoke test passed: {count} events found")
-sys.exit(0)
+if __name__ == "__main__":
+    test_preprocessor()
