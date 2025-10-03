@@ -11,6 +11,7 @@ import torch
 import pandas as pd
 from model import train_model, CyberMoE, NUM_EXPERTS
 from preprocessor import CyberPreprocessor
+from feedback import log_feedback
 
 # --------------------------------------------------------------------------- #
 # Model Loading (with caching)
@@ -275,6 +276,52 @@ if 'analysis_results' in st.session_state:
             st.dataframe(explanation_df)
         else:
             st.warning("Please analyze a sentence first.")
+
+    # --- RLHF Feedback Section ---
+    st.header("✅ Provide Feedback (RLHF)")
+    st.write("Help improve the model by telling us if the analysis was correct.")
+
+    with st.form("feedback_form", clear_on_submit=True):
+        was_correct = st.radio("Was the classification correct?", ("Yes", "No"), index=0, horizontal=True)
+        corrected_label = st.selectbox("If not correct, what should it be?", ("Benign", "Malicious"))
+        user_notes = st.text_area("Additional notes (optional)", "")
+        submitted = st.form_submit_button("Submit Feedback")
+
+    if submitted:
+        # Collect current context for feedback logging
+        probs = torch.softmax(final_logits, dim=-1).cpu().numpy().flatten()
+        pred_label = int(probs.argmax())
+        pred_conf = float(probs[pred_label])
+
+        domain_probs = torch.softmax(domain_pred, dim=-1)[0].cpu().numpy().flatten()
+        domain_idx = int(domain_probs.argmax())
+        domain_conf = float(domain_probs[domain_idx])
+
+        gating_scores = gating_probs[0].detach().cpu().numpy().tolist()
+        experts_array = expert_logits[0].detach().cpu().numpy().tolist()
+        features = st.session_state.preprocessed.get('features', {}) if 'preprocessed' in st.session_state else {}
+        domain_scores = st.session_state.preprocessed.get('domain_scores', torch.tensor([])).detach().cpu().numpy().tolist() if 'preprocessed' in st.session_state else []
+
+        feedback_record = {
+            "user_input": st.session_state.get('user_input_for_analysis', ''),
+            "pred_label": "Malicious" if pred_label == 1 else "Benign",
+            "pred_confidence": pred_conf,
+            "domain_pred": expert_names[domain_idx],
+            "domain_confidence": domain_conf,
+            "gating_scores": gating_scores,
+            "expert_logits": experts_array,
+            "features": features,
+            "domain_scores": domain_scores,
+            "user_feedback": True if was_correct == "Yes" else False,
+            "correction": None if was_correct == "Yes" else corrected_label,
+            "notes": user_notes,
+        }
+
+        try:
+            log_feedback(feedback_record)
+            st.success("Thanks! Your feedback was recorded.")
+        except Exception as e:
+            st.error(f"Failed to record feedback: {e}")
 
 
 # --- Sidebar Explanation ---
