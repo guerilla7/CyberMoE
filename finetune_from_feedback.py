@@ -19,6 +19,7 @@ from model import CyberMoE, NUM_EXPERTS
 
 
 DEFAULT_FEEDBACK_PATH = os.path.join("data", "feedback.jsonl")
+FINETUNED_CHECKPOINT = os.path.join("checkpoints", "cybermoe_finetuned.pt")
 
 
 class FeedbackFTDataset(Dataset):
@@ -91,6 +92,28 @@ def finetune_from_feedback(
             loss.backward()
             opt.step()
 
+    # Persist checkpoint
+    os.makedirs(os.path.dirname(FINETUNED_CHECKPOINT), exist_ok=True)
+    torch.save({
+        "state_dict": model.state_dict(),
+        "top_k": model.top_k,
+        "num_experts": NUM_EXPERTS,
+    }, FINETUNED_CHECKPOINT)
+
+    return model
+
+
+def load_finetuned_model(device: str | torch.device = None):
+    """Load finetuned model checkpoint if present; return None if missing."""
+    ckpt_path = FINETUNED_CHECKPOINT
+    if not os.path.exists(ckpt_path):
+        return None
+    device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    ckpt = torch.load(ckpt_path, map_location=device)
+    top_k = int(ckpt.get("top_k", 2))
+    model = CyberMoE(top_k=top_k).to(device)
+    model.load_state_dict(ckpt["state_dict"])
+    model.eval()
     return model
 
 

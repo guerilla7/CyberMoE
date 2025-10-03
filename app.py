@@ -11,9 +11,9 @@ import torch
 import pandas as pd
 from model import train_model, CyberMoE, NUM_EXPERTS
 from preprocessor import CyberPreprocessor
-from feedback import log_feedback
+from feedback import log_feedback, DEFAULT_FEEDBACK_PATH
 from rlhf_reward_model import train_reward_model
-from finetune_from_feedback import finetune_from_feedback
+from finetune_from_feedback import finetune_from_feedback, load_finetuned_model
 
 # --------------------------------------------------------------------------- #
 # Model Loading (with caching)
@@ -156,11 +156,58 @@ if st.sidebar.button("Fine-tune Model from Feedback"):
         except Exception as e:
             st.sidebar.error(f"Failed to fine-tune from feedback: {e}")
 
-# Load the model (use fine-tuned model if available)
+# Controls for persisted model
+col_load, col_clear = st.sidebar.columns(2)
+if col_load.button("Load Fine-Tuned"):
+    loaded = load_finetuned_model()
+    if loaded is not None:
+        st.session_state.override_model = loaded
+        st.sidebar.success("Fine-tuned model loaded.")
+    else:
+        st.sidebar.info("No fine-tuned checkpoint found.")
+
+if col_clear.button("Clear Fine-Tuned"):
+    st.session_state.override_model = None
+    st.sidebar.info("Fine-tuned model cleared for this session.")
+
+# --- Feedback Analytics (load helper) ---
+@st.cache_data
+def load_feedback_df(path: str = DEFAULT_FEEDBACK_PATH, _mtime: float | None = None):
+    import json
+    import os
+    import pandas as pd
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    rows = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                rec = json.loads(line)
+                rows.append(rec)
+            except Exception:
+                continue
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    # Parse timestamp and normalize types
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    # Ensure lists exist even if missing
+    for col in ["gating_scores", "expert_logits", "domain_scores"]:
+        if col not in df.columns:
+            df[col] = [[] for _ in range(len(df))]
+    return df
+
+# Load the model (auto-load fine-tuned checkpoint if present; allow session override)
 if 'override_model' in st.session_state and st.session_state.override_model is not None:
     model = st.session_state.override_model
 else:
-    model = load_model(use_weighted_loss, aux_loss_weight, top_k, use_pretraining)
+    persisted = load_finetuned_model()
+    if persisted is not None:
+        model = persisted
+        st.sidebar.success("Loaded fine-tuned model from checkpoint.")
+    else:
+        model = load_model(use_weighted_loss, aux_loss_weight, top_k, use_pretraining)
 expert_names = ["Network", "Malware", "Phishing", "Cloud Security", "Web App Security"]
 
 # --- Input Area ---
@@ -347,6 +394,101 @@ if 'analysis_results' in st.session_state:
             st.success("Thanks! Your feedback was recorded.")
         except Exception as e:
             st.error(f"Failed to record feedback: {e}")
+
+    # --- Feedback Analytics Section ---
+    st.header("📈 Feedback Analytics")
+    import os
+    fb_mtime = os.path.getmtime(DEFAULT_FEEDBACK_PATH) if os.path.exists(DEFAULT_FEEDBACK_PATH) else None
+    fb_df = load_feedback_df(_mtime=fb_mtime)
+    if fb_df is None or fb_df.empty:
+        st.info("No feedback collected yet. Submit feedback above to populate analytics.")
+    else:
+        # Basic KPIs
+        total = len(fb_df)
+        correct = int(fb_df.get("user_feedback", pd.Series([False]*total)).astype(bool).sum())
+        incorrect = total - correct
+        accuracy = (correct / total) if total > 0 else 0.0
+
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        kpi1.metric("Total Feedback", total)
+        kpi2.metric("Correct", correct)
+        kpi3.metric("Incorrect", incorrect)
+        kpi4.metric("Observed Accuracy", f"{accuracy*100:.1f}%")
+
+        # Distributions
+        colA, colB = st.columns(2)
+        with colA:
+            st.subheader("Prediction Labels")
+            if "pred_label" in fb_df.columns:
+                st.bar_chart(fb_df["pred_label"].value_counts())
+            else:
+                st.write("No prediction labels found.")
+        with colB:
+            st.subheader("Corrections (when incorrect)")
+            if "correction" in fb_df.columns:
+                st.bar_chart(fb_df[fb_df["user_feedback"] == False]["correction"].fillna("None").value_counts())
+            else:
+                st.write("No corrections logged.")
+
+        colC, colD = st.columns(2)
+        with colC:
+            st.subheader("Predicted Domain")
+            if "domain_pred" in fb_df.columns:
+                st.bar_chart(fb_df["domain_pred"].value_counts())
+            else:
+                st.write("No domain predictions found.")
+        with colD:
+            st.subheader("Avg Confidence by Outcome")
+            if "pred_confidence" in fb_df.columns and "user_feedback" in fb_df.columns:
+                conf_grp = fb_df.groupby(fb_df["user_feedback"].astype(bool))["pred_confidence"].mean()
+                conf_grp.index = conf_grp.index.map(lambda x: "Correct" if x else "Incorrect")
+                st.bar_chart(conf_grp)
+            else:
+                st.write("Confidence not available.")
+
+        # Average gating and domain scores
+        with st.expander("Model Signals Averages"):
+            try:
+                # Expand gating scores into DataFrame columns
+                gating_expanded = fb_df["gating_scores"].apply(lambda x: x if isinstance(x, list) else [])
+                max_len = int(gating_expanded.apply(lambda l: len(l) if isinstance(l, list) else 0).max())
+                gating_cols = pd.DataFrame(gating_expanded.apply(lambda l: (l + [0.0]*(max_len-len(l)))[:max_len] if isinstance(l, list) else [0.0]*max_len))
+                # The above yields a DataFrame column of lists; convert properly
+                gating_matrix = pd.DataFrame(gating_cols[0].tolist()) if max_len > 0 else pd.DataFrame()
+                if not gating_matrix.empty:
+                    gating_matrix.columns = [f"Expert {i+1}" for i in range(max_len)]
+                    st.bar_chart(gating_matrix.mean())
+                else:
+                    st.write("No gating scores to aggregate.")
+            except Exception:
+                st.write("Failed to aggregate gating scores.")
+
+            try:
+                domain_expanded = fb_df["domain_scores"].apply(lambda x: x if isinstance(x, list) else [])
+                dmax = int(domain_expanded.apply(lambda l: len(l) if isinstance(l, list) else 0).max())
+                domain_cols = pd.DataFrame(domain_expanded.apply(lambda l: (l + [0.0]*(dmax-len(l)))[:dmax] if isinstance(l, list) else [0.0]*dmax))
+                domain_matrix = pd.DataFrame(domain_cols[0].tolist()) if dmax > 0 else pd.DataFrame()
+                if not domain_matrix.empty:
+                    domain_matrix.columns = expert_names[:dmax]
+                    st.bar_chart(domain_matrix.mean())
+                else:
+                    st.write("No domain scores to aggregate.")
+            except Exception:
+                st.write("Failed to aggregate domain scores.")
+
+        # Time-series accuracy
+        if "timestamp" in fb_df.columns and fb_df["timestamp"].notna().any():
+            st.subheader("Accuracy Over Time")
+            ts = fb_df.dropna(subset=["timestamp"])\
+                .assign(correct=fb_df["user_feedback"].astype(bool))\
+                .set_index("timestamp")["correct"]\
+                .resample("1H").mean().fillna(0.0)
+            st.line_chart(ts)
+
+        # Recent feedback table
+        st.subheader("Most Recent Feedback")
+        show_cols = [c for c in ["timestamp","user_input","pred_label","pred_confidence","user_feedback","correction","domain_pred","domain_confidence","notes"] if c in fb_df.columns]
+        st.dataframe(fb_df.sort_values(by="timestamp", ascending=False)[show_cols].head(25), use_container_width=True)
 
 
 # --- Sidebar Explanation ---
