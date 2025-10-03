@@ -156,6 +156,50 @@ if st.sidebar.button("Fine-tune Model from Feedback"):
         except Exception as e:
             st.sidebar.error(f"Failed to fine-tune from feedback: {e}")
 
+# --- Feedback Export/Import ---
+st.sidebar.markdown("---")
+st.sidebar.title("🗂️ Feedback Data")
+from io import BytesIO
+import os
+
+# Export current feedback file if it exists
+if os.path.exists(DEFAULT_FEEDBACK_PATH):
+    try:
+        with open(DEFAULT_FEEDBACK_PATH, "rb") as f:
+            data_bytes = f.read()
+        st.sidebar.download_button(
+            label="Download feedback.jsonl",
+            data=data_bytes,
+            file_name="feedback.jsonl",
+            mime="application/json",
+            use_container_width=True
+        )
+    except Exception as e:
+        st.sidebar.error(f"Failed to load feedback for download: {e}")
+else:
+    st.sidebar.info("No feedback.jsonl found yet.")
+
+# Import feedback.jsonl (append or replace)
+uploaded_file = st.sidebar.file_uploader("Upload feedback.jsonl", type=["jsonl", "json"], accept_multiple_files=False)
+import_action = st.sidebar.radio("Import mode", ["Append", "Replace"], horizontal=True)
+if uploaded_file is not None:
+    try:
+        os.makedirs(os.path.dirname(DEFAULT_FEEDBACK_PATH), exist_ok=True)
+        content = uploaded_file.getvalue()
+        if import_action == "Replace":
+            with open(DEFAULT_FEEDBACK_PATH, "wb") as f:
+                f.write(content)
+            st.sidebar.success("Replaced feedback.jsonl with uploaded file.")
+        else:
+            with open(DEFAULT_FEEDBACK_PATH, "ab") as f:
+                # Ensure newline separation if needed
+                if len(content) and not content.endswith(b"\n"):
+                    content += b"\n"
+                f.write(content)
+            st.sidebar.success("Appended uploaded feedback to existing file.")
+    except Exception as e:
+        st.sidebar.error(f"Failed to import feedback: {e}")
+
 # Controls for persisted model
 col_load, col_clear = st.sidebar.columns(2)
 if col_load.button("Load Fine-Tuned"):

@@ -127,3 +127,32 @@ Some scripts (such as `consumer_morpheus_to_cybermoe.py` and `smoke_test.py`) re
     ```
 
 If these files are missing, you may encounter file-not-found errors. You can create them manually or use the provided samples above.
+
+## Large Files and Git LFS
+
+This repo uses Git LFS to store large artifacts like model checkpoints and some datasets. The patterns are configured in `.gitattributes` (e.g., `checkpoints/**`, `data/**`, `*.pt`, `*.csv`, `*.jsonl`). Collaborators should set up Git LFS locally to avoid pointer files and 100MB push limits on GitHub.
+
+Quick start for collaborators:
+
+1. Install Git LFS
+    - macOS: `brew install git-lfs`
+    - Windows (Chocolatey): `choco install git-lfs`
+    - Debian/Ubuntu: `sudo apt-get install git-lfs`
+2. Initialize in your environment: `git lfs install`
+3. Clone or update the repo:
+    - Fresh clone: `git clone <repo>` (LFS files will download automatically)
+    - Existing clone: `git lfs pull` (fetch binary content for LFS pointers)
+4. Verify LFS tracking: `git lfs ls-files`
+
+Pushing large files:
+
+- Add files that match tracked patterns as usual (e.g., files under `checkpoints/`), then `git add` / `git commit` / `git push`. LFS will store the content outside normal Git history.
+- If you encounter GitHub’s 100MB limit for a file that was previously committed without LFS, you can migrate history (use with care):
+  - `git lfs migrate import --include='checkpoints/*.pt'`
+  - `git push --force-with-lease`
+  Coordinate with your team before rewriting history.
+
+Tips:
+
+- In CI or constrained environments, you can skip automatic LFS downloads by setting `GIT_LFS_SKIP_SMUDGE=1` and later fetch with `git lfs pull` when needed.
+- Ensure new large file types are added to `.gitattributes` if they fall outside existing patterns.
