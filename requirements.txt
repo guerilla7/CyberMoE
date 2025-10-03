@@ -3,3 +3,5 @@ transformers
 streamlit
 scikit-learn
 datasets
+pandas
+graphviz

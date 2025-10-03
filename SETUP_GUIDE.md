@@ -159,6 +159,13 @@ streamlit run app.py
 
 This will start a web server and provide a local URL (usually `http://localhost:8501`) that you can open in your browser.
 
+When the app is running, you can:
+
+- Use the main panel to analyze a sentence and view Mixture-of-Experts routing and domain relevance.
+- Provide RLHF feedback (correct/incorrect, optional correction and notes). Feedback is stored in `data/feedback.jsonl`.
+- In the sidebar under “🧪 RLHF Utilities,” train a reward model from feedback and fine-tune CyberMoE from feedback. The fine-tuned checkpoint is saved to `checkpoints/cybermoe_finetuned.pt` and will be auto-loaded on subsequent app starts.
+- Under “🗂️ Feedback Data,” export `feedback.jsonl` or import an existing one (Append or Replace). Replace requires an explicit confirmation checkbox. Uploads are validated as line-delimited JSON with minimal schema checks.
+
 ### Option B: Console Demo
 
 ```bash
@@ -226,7 +233,7 @@ docker run --gpus all -p 8501:8501 cybermoe
 
 1. **Download the model once**  
    ```bash
-   python -c "from transformers import AutoModel; AutoModel.from_pretrained('distilbert-base-uncased')"
+    python -c "from transformers import AutoModel; AutoModel.from_pretrained('bert-base-uncased')"
    ```
 
 2. **Set cache path** (so the script never tries to hit HF servers again)
@@ -255,4 +262,22 @@ docker run --gpus all -p 8501:8501 cybermoe
 
 ### Final Note
 
-With the above setup, your local workstation will be able to run **CyberMoE** entirely offline, leveraging the GPU for inference. The script is lightweight enough that it can even run on a modest CPU‑only machine, but it will be slower.
+With the above setup, your local workstation will be able to run **CyberMoE** entirely offline, leveraging the GPU for inference. The Streamlit app includes RLHF feedback collection, a tiny reward model trainer, supervised fine-tuning, analytics, and import/export of feedback data. The fine-tuned model checkpoint persists across app restarts. The script is lightweight enough that it can even run on a modest CPU‑only machine, but it will be slower.
+
+---
+
+## Appendix: Git LFS for Large Artifacts
+
+This repository uses Git Large File Storage (LFS) to track large artifacts (e.g., checkpoints and some datasets). If you plan to push or pull large files, set up LFS first:
+
+```bash
+git lfs install
+git lfs pull     # to fetch LFS content for existing pointers
+```
+
+The `.gitattributes` includes patterns like `checkpoints/**`, `data/**`, `*.pt`, `*.csv`, and `*.jsonl`. New large files matching those patterns will be stored via LFS automatically. If a previously committed large file triggers GitHub’s 100MB limit, you may need to migrate it to LFS and force-push (coordinate with collaborators):
+
+```bash
+git lfs migrate import --include='checkpoints/*.pt'
+git push --force-with-lease
+```

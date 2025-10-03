@@ -17,6 +17,10 @@ The project is organized into the following key files:
 -   `CyberMoe.py`: The original command-line application for training and demonstration.
 -   `app.py`: The new interactive Streamlit web demo.
 -   `model.py`: Contains the core PyTorch model definitions (`CyberMoE`, `Expert`, `GatingNetwork`) and the training logic, making the model reusable.
+-   `preprocessor.py`: Extracts cybersecurity entities and domain relevance scores used by the model.
+-   `feedback.py`: Lightweight JSONL logger for RLHF feedback.
+-   `rlhf_reward_model.py`: Trains a tiny reward model from feedback signals.
+-   `finetune_from_feedback.py`: Fine-tunes `CyberMoE` on collected feedback and persists a checkpoint.
 -   `requirements.txt`: A list of all Python dependencies for the project.
 -   `SETUP_GUIDE.md`: A detailed guide for setting up the environment, especially for GPU usage.
 
@@ -128,6 +132,27 @@ Some scripts (such as `consumer_morpheus_to_cybermoe.py` and `smoke_test.py`) re
 
 If these files are missing, you may encounter file-not-found errors. You can create them manually or use the provided samples above.
 
+## Built-in RLHF Loop and Feedback Analytics
+
+The Streamlit app supports a simple RLHF loop:
+
+- Collect feedback per inference (correct/incorrect, optional correction, notes). Feedback is written to `data/feedback.jsonl`.
+- Train a tiny reward model on the collected signals via the sidebar button.
+- Fine-tune CyberMoE from the feedback data. The fine-tuned checkpoint is saved to `checkpoints/cybermoe_finetuned.pt` and auto-loaded on app restart.
+
+Feedback analytics are available in the main view:
+
+- KPIs (total, correct/incorrect, observed accuracy)
+- Distributions (predicted labels, corrections, predicted domains)
+- Confidence analysis by outcome
+- Average gating signal and domain relevance scores
+- Accuracy over time and recent samples table
+
+You can also export/import `feedback.jsonl` via the sidebar:
+
+- Download the current file for backup or transfer.
+- Upload a JSONL file and choose Append or Replace. Replace requires a confirmation checkbox, and uploads are validated with a minimal schema before being written.
+
 ## Large Files and Git LFS
 
 This repo uses Git LFS to store large artifacts like model checkpoints and some datasets. The patterns are configured in `.gitattributes` (e.g., `checkpoints/**`, `data/**`, `*.pt`, `*.csv`, `*.jsonl`). Collaborators should set up Git LFS locally to avoid pointer files and 100MB push limits on GitHub.
@@ -156,3 +181,32 @@ Tips:
 
 - In CI or constrained environments, you can skip automatic LFS downloads by setting `GIT_LFS_SKIP_SMUDGE=1` and later fetch with `git lfs pull` when needed.
 - Ensure new large file types are added to `.gitattributes` if they fall outside existing patterns.
+
+## Troubleshooting
+
+- Streamlit shows old results or analytics
+    - Click “Restart Demo (retrain model)” in the sidebar to clear cached model and rerun training.
+    - Feedback analytics are cached with the file modification time; if you manually edit `data/feedback.jsonl`, click the “Rerun” button (top-right) in Streamlit.
+    - If a fine-tuned model is active, use “Clear Fine-Tuned” in the sidebar to revert to the base cached model.
+
+- Fine-tuned model not loading after restart
+    - Confirm `checkpoints/cybermoe_finetuned.pt` exists locally and is readable.
+    - If you just pulled from Git, ensure LFS pulled the binary instead of a pointer file: `git lfs pull`.
+
+- Feedback upload fails schema check
+    - The uploader expects line-delimited JSON (JSONL). Each line should be a JSON object with at least `user_input` (string) and `user_feedback` (boolean). Optional fields like `pred_label`/`correction` must be "Benign" or "Malicious" (or obvious equivalents like true/false/1/0).
+    - Replace mode is destructive and requires the confirmation checkbox.
+
+- Graphviz diagram not rendering
+    - The app uses `st.graphviz_chart`. The Python `graphviz` package is included, but some systems also need the Graphviz system binary.
+        - macOS: `brew install graphviz`
+        - Ubuntu/Debian: `sudo apt-get install graphviz`
+
+- Push to GitHub fails with >100MB file
+    - See “Large Files and Git LFS” above. Track the file with LFS or migrate history, then push.
+
+- GPU/CUDA not detected
+    - Make sure your PyTorch wheel matches your CUDA version and drivers. See SETUP_GUIDE for CUDA install and verification (`torch.cuda.is_available()`).
+
+- Streamlit port already in use
+    - Run on a different port: `streamlit run app.py --server.port=8502`
