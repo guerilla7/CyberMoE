@@ -195,37 +195,59 @@ If you prefer containerization, the following `Dockerfile` will spin up an ident
 
 ```dockerfile
 # Dockerfile
-FROM nvidia/cuda:11.8-runtime-ubuntu22.04
+FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
 
 # Install system deps
 RUN apt-get update && \
-    apt-get install -y python3.10 python3-pip build-essential git && \
+    apt-get install -y python3.10 python3-pip build-essential git graphviz && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Create app directory
+# Set working directory
 WORKDIR /app
 
-# Copy requirements and install dependencies
+# Copy requirements first for better caching
 COPY requirements.txt .
-RUN python3 -m pip install --upgrade pip && \
-    pip install -r requirements.txt
 
-# Copy the rest of the application
+# Install base requirements
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Install specific versions for compatibility
+# Using PyTorch 2.0.1 instead of 2.6+ to avoid unpickling issues with older checkpoints
+RUN pip3 install --no-cache-dir \
+    torch==2.0.1 \
+    torchvision==0.15.2 \
+    torchaudio==2.0.2 \
+    --extra-index-url https://download.pytorch.org/whl/cu118 \
+    transformers==4.36.2 \
+    streamlit==1.29.0 \
+    pandas==2.0.3 \
+    datasets==2.14.6
+
+# Copy application code
 COPY . .
 
-# Expose the Streamlit port
+# Set up environment
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Expose port for Streamlit
 EXPOSE 8501
 
-# Command to run the Streamlit app
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Run Streamlit
+CMD ["streamlit", "run", "app.py"]
 ```
 
 Build & run:
 
 ```bash
 docker build -t cybermoe .
-docker run --gpus all -p 8501:8501 cybermoe
+docker run --gpus all -p 8501:8501 -v $(pwd)/data:/app/data -v $(pwd)/checkpoints:/app/checkpoints cybermoe
 ```
+
+Note: The volume mounts ensure your feedback data and fine-tuned models persist outside the container.
+
+> **Important**: This Dockerfile intentionally pins PyTorch to version 2.0.1 to avoid compatibility issues with older checkpoint files. PyTorch 2.6+ changed the default behavior of `torch.load()` to use `weights_only=True`, which breaks loading older checkpoint files. Our code now includes a compatibility fix that works with both older and newer PyTorch versions.
 
 ---
 
@@ -257,6 +279,18 @@ docker run --gpus all -p 8501:8501 cybermoe
 | ✅ | Transformers 4.36+ |
 | ✅ | Enough VRAM (≥ 4 GB for DistilBERT) |
 | ✅ | Internet at least once for model download |
+
+---
+
+## UI Features and Theme Support
+
+The app now includes theme support with light and dark modes:
+
+- **Light Mode**: Default Streamlit appearance
+- **Dark Mode**: Optimized for low-light environments
+- **System**: Automatically follows your OS preference setting
+
+Theme selection is available in the "💫 Appearance" section of the sidebar. All visualizations, charts, and components are theme-aware. For more details on how the theme system works and how to customize it further, see `THEME_GUIDE.md`.
 
 ---
 

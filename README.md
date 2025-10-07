@@ -29,6 +29,7 @@ The project is organized into the following key files:
 -   `finetune_from_feedback.py`: Fine-tunes `CyberMoE` on collected feedback and persists a checkpoint.
 -   `requirements.txt`: A list of all Python dependencies for the project.
 -   `SETUP_GUIDE.md`: A detailed guide for setting up the environment, especially for GPU usage.
+-   `THEME_GUIDE.md`: Documentation for the app's theme system, including light and dark mode options.
 
 ## Core Concepts Demonstrated
 
@@ -159,6 +160,15 @@ You can also export/import `feedback.jsonl` via the sidebar:
 - Download the current file for backup or transfer.
 - Upload a JSONL file and choose Append or Replace. Replace requires a confirmation checkbox, and uploads are validated with a minimal schema before being written.
 
+## Themes and Appearance
+
+The app supports multiple themes:
+- Light mode (default Streamlit theme)
+- Dark mode (optimized for readability)
+- System preference (follows OS settings)
+
+Change the theme using the "💫 Appearance" section in the sidebar. All visualizations and components are theme-aware and will update automatically. See `THEME_GUIDE.md` for more details on theming support.
+
 ## Large Files and Git LFS
 
 This repo uses Git LFS to store large artifacts like model checkpoints and some datasets. The patterns are configured in `.gitattributes` (e.g., `checkpoints/**`, `data/**`, `*.pt`, `*.csv`, `*.jsonl`). Collaborators should set up Git LFS locally to avoid pointer files and 100MB push limits on GitHub.
@@ -214,5 +224,16 @@ Tips:
 - GPU/CUDA not detected
     - Make sure your PyTorch wheel matches your CUDA version and drivers. See SETUP_GUIDE for CUDA install and verification (`torch.cuda.is_available()`).
 
+- PyTorch 2.6 checkpoint loading errors
+    - If you see errors like `TypeError: load() got an unexpected keyword argument 'weights_only'` or unpickling errors when loading checkpoints, it's due to PyTorch 2.6+ changing the default behavior of `torch.load()`. 
+    - Our code includes a compatibility fix that works with both older and newer PyTorch versions.
+    - The Docker container uses PyTorch 2.0.1 to avoid these issues entirely.
+    - You can find available CUDA tags at [Docker Hub](https://hub.docker.com/r/nvidia/cuda/tags).
+
 - Streamlit port already in use
     - Run on a different port: `streamlit run app.py --server.port=8502`
+
+- Theme or dark mode not working properly
+    - Clear your browser cache and refresh the page
+    - Check if your browser supports the prefers-color-scheme media query
+    - See `THEME_GUIDE.md` for more details on theme customization
