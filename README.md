@@ -1,13 +1,40 @@
 # CyberMoE: A Minimal Mixture-of-Experts Demonstration
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/guerilla7/CyberMoE) 
 
-This project provides a minimal, educational implementation of a sparse **Mixture-of-Experts (MoE)** model. It is designed to demonstrate the core concepts of MoE within a cybersecurity context, showing how different "expert" models can be used to classify security-related text.
 
-This repository contains two main components:
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/guerilla7/CyberMoE)
+![GitHub Repo stars](https://img.shields.io/github/stars/guerilla7/CyberMoE?style=social)
+![GitHub forks](https://img.shields.io/github/forks/guerilla7/CyberMoE?style=social)
+![GitHub issues](https://img.shields.io/github/issues/guerilla7/CyberMoE)
+![GitHub License](https://img.shields.io/github/license/guerilla7/CyberMoE)
+![GitHub last commit](https://img.shields.io/github/last-commit/guerilla7/CyberMoE)
+![Python](https://img.shields.io/badge/python-3.8%2B-blue)
+
+<img width="1265" height="1064" alt="Screenshot 2025-10-02 at 11 13 37 PM" src="https://github.com/user-attachments/assets/926491be-7e6b-4610-89f4-fcf9efcc30bf" />
+  
+# 📑 Table of Contents
+
+- [🖼️ Screenshots](#screenshots)
+- [📦 Project Structure](#project-structure)
+- [💡 Core Concepts Demonstrated](#core-concepts-demonstrated)
+- [⚙️ How It Works](#how-it-works)
+- [🛠️ Setup](#setup)
+- [🚀 How to Run](#how-to-run)
+- [🔍 Interpreting the Output](#interpreting-the-output)
+- [🗂️ Data Files Required for Testing](#data-files-required-for-testing)
+- [🎛️ Built-in RLHF Loop and Feedback Analytics](#built-in-rlhf-loop-and-feedback-analytics)
+- [📦 Large Files and Git LFS](#large-files-and-git-lfs)
+- [🧰 Troubleshooting](#troubleshooting)
+- [✅ To-Do](#to-do)
+
+---
+🚀  This project provides a minimal, educational implementation of a sparse **Mixture-of-Experts (MoE)** model. It is designed to demonstrate the core concepts of MoE within a cybersecurity context, showing how different "expert" models can be used to classify security-related text.
+
+🗺️  This repository contains two main components:
 1.  A command-line script (`CyberMoe.py`) that trains the model and runs inference on a predefined set of examples.
 2.  An interactive web demo (`app.py`) built with Streamlit that allows you to classify your own sentences and visualize the MoE routing in real-time.
 
-<img width="1265" height="1064" alt="Screenshot 2025-10-02 at 11 13 37 PM" src="https://github.com/user-attachments/assets/926491be-7e6b-4610-89f4-fcf9efcc30bf" />
+## 🖼️ Screenshots
+
 <img width="1267" height="1225" alt="Screenshot 2025-10-02 at 11 16 13 PM" src="https://github.com/user-attachments/assets/47cd5b93-cbf2-4f36-ab7d-2a6b09e44fc4" />
 <img width="1267" height="1083" alt="Screenshot 2025-10-02 at 11 17 11 PM" src="https://github.com/user-attachments/assets/65666f4e-f49e-424d-ad35-a83a908c6d19" />
 <img width="1267" height="1245" alt="Screenshot 2025-10-02 at 11 18 05 PM" src="https://github.com/user-attachments/assets/99d7c305-4d06-491d-8276-34958bfaf994" />
@@ -16,7 +43,10 @@ This repository contains two main components:
 <img width="257" height="382" alt="Screenshot 2025-10-02 at 11 22 59 PM" src="https://github.com/user-attachments/assets/59a74041-e37f-488d-8c65-3f305753f5a1" />
 <img width="257" height="580" alt="Screenshot 2025-10-02 at 11 23 47 PM" src="https://github.com/user-attachments/assets/564c2fcd-2684-407c-93b7-5bc8aed33ecf" />
 
-## Project Structure
+---
+
+<details>
+<summary>📦 Project Structure</summary>
 
 The project is organized into the following key files:
 
@@ -31,7 +61,10 @@ The project is organized into the following key files:
 -   `SETUP_GUIDE.md`: A detailed guide for setting up the environment, especially for GPU usage.
 -   `THEME_GUIDE.md`: Documentation for the app's theme system, including light and dark mode options.
 
-## Core Concepts Demonstrated
+</details>
+
+<details>
+<summary>💡 Core Concepts Demonstrated</summary>
 
 This script is a hands-on demonstration of a modern MoE architecture:
 
@@ -40,14 +73,20 @@ This script is a hands-on demonstration of a modern MoE architecture:
 3.  **Gating Network**: A small network that analyzes the encoded text and assigns a relevance score to each expert.
 4.  **Sparse Routing (Top-K)**: To demonstrate efficiency, the model only **activates the Top-K (K=2)** most relevant experts for any given input. The output of the non-selected expert is skipped entirely, saving computation.
 
-## How It Works
+</details>
+
+<details>
+<summary>⚙️ How It Works</summary>
 
 The script's main function, `train_demo()`, performs two phases:
 
 1.  **Synthetic Training**: First, it trains the MoE model on a "themed" synthetic dataset. It generates sentences with specific keywords (e.g., "IP address," "malware," "email") to teach the gating network how to route different types of inputs to the correct expert.
 2.  **Inference**: After the brief training phase, it runs inference on a sample of five security-themed sentences. The output clearly shows the model's final prediction, the gating network's routing decisions, and which experts were sparsely activated.
 
-## Setup
+</details>
+
+<details>
+<summary>🛠️ Setup</summary>
 
 1.  **Clone the repository:**
     ```bash
@@ -61,7 +100,10 @@ The script's main function, `train_demo()`, performs two phases:
     ```
     *(For a more detailed guide on setting up the environment, including specific CUDA/GPU drivers, see `SETUP_GUIDE.md`.)*
 
-## How to Run
+</details>
+
+<details>
+<summary>🚀 How to Run</summary>
 
 This project comes with two ways to run the model:
 
@@ -87,7 +129,10 @@ You can still run the original script from your terminal. This will train the mo
 python CyberMoe.py
 ```
 
-## Interpreting the Output
+</details>
+
+<details>
+<summary>🔍 Interpreting the Output</summary>
 
 ### Web Demo Output
 
@@ -122,7 +167,10 @@ After running the `CyberMoe.py` script, you will see the training progress follo
     - `ACTIVATED`: The model computed the output for the "Network" and "Phishing" experts. You can see their raw output scores (logits).
     - `SKIPPED`: The "Malware" expert was deemed irrelevant by the gating network, so its logits are `[0. 0.]`, meaning it was **not computed**. This demonstrates the computational savings of sparse MoE models.
 
-## Data Files Required for Testing
+</details>
+
+<details>
+<summary>🗂️ Data Files Required for Testing</summary>
 
 Some scripts (such as `consumer_morpheus_to_cybermoe.py` and `smoke_test.py`) require input and output data files in the `data/` directory:
 
@@ -139,7 +187,10 @@ Some scripts (such as `consumer_morpheus_to_cybermoe.py` and `smoke_test.py`) re
 
 If these files are missing, you may encounter file-not-found errors. You can create them manually or use the provided samples above.
 
-## Built-in RLHF Loop and Feedback Analytics
+</details>
+
+<details>
+<summary>🎛️ Built-in RLHF Loop and Feedback Analytics</summary>
 
 The Streamlit app supports a simple RLHF loop:
 
@@ -160,7 +211,10 @@ You can also export/import `feedback.jsonl` via the sidebar:
 - Download the current file for backup or transfer.
 - Upload a JSONL file and choose Append or Replace. Replace requires a confirmation checkbox, and uploads are validated with a minimal schema before being written.
 
-## Themes and Appearance
+</details>
+
+<details>
+<summary>🎨 Themes and Appearance</summary>
 
 The app supports multiple themes:
 - Light mode (default Streamlit theme)
@@ -169,7 +223,10 @@ The app supports multiple themes:
 
 Change the theme using the "💫 Appearance" section in the sidebar. All visualizations and components are theme-aware and will update automatically. See `THEME_GUIDE.md` for more details on theming support.
 
-## Large Files and Git LFS
+</details>
+
+<details>
+<summary>📦 Large Files and Git LFS</summary>
 
 This repo uses Git LFS to store large artifacts like model checkpoints and some datasets. The patterns are configured in `.gitattributes` (e.g., `checkpoints/**`, `data/**`, `*.pt`, `*.csv`, `*.jsonl`). Collaborators should set up Git LFS locally to avoid pointer files and 100MB push limits on GitHub.
 
@@ -198,7 +255,10 @@ Tips:
 - In CI or constrained environments, you can skip automatic LFS downloads by setting `GIT_LFS_SKIP_SMUDGE=1` and later fetch with `git lfs pull` when needed.
 - Ensure new large file types are added to `.gitattributes` if they fall outside existing patterns.
 
-## Troubleshooting
+</details>
+
+<details>
+<summary>🧰 Troubleshooting</summary>
 
 - Streamlit shows old results or analytics
     - Click “Restart Demo (retrain model)” in the sidebar to clear cached model and rerun training.
@@ -237,3 +297,16 @@ Tips:
     - Clear your browser cache and refresh the page
     - Check if your browser supports the prefers-color-scheme media query
     - See `THEME_GUIDE.md` for more details on theme customization
+
+</details>
+
+<details>
+<summary>✅ To-Do</summary>
+
+- [ ] Improve UI/UX
+- [ ] Add real-world datasets for each Expert Network
+- [ ] Pluggable MoE Architecture: The ability for users to configure and use a Small Language Model of choice for their Expert Networks
+- [x] Add light/dark theme support with system preference detection
+- [ ] Improve and/or optimize Gating Network behavior
+
+</details>
