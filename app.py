@@ -654,3 +654,14 @@ st.sidebar.info(f"""
 - **Weighted Loss:** Gives more importance to the under-represented "Benign" class during training to improve accuracy.
 - **Auxiliary Load Balancing Loss:** Encourages the gating network to use all experts more evenly, preventing it from relying too heavily on just a few.
 """)
+
+# --- Footer ---
+st.markdown("---")
+st.markdown(
+    """
+    <div style='text-align: center; color: #666; padding: 20px;'>
+        <p>MIT License | Copyright © 2025 Ron F. del Rosario</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
