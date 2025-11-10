@@ -1,5 +1,6 @@
 # CyberMoE: A Minimal Mixture-of-Experts Demonstration
 
+[🌐 Website](https://cybermoe.lovable.app/) | [📄 Whitepaper](https://cybermoe.lovable.app/whitepaper)
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/guerilla7/CyberMoE)
 ![GitHub Repo stars](https://img.shields.io/github/stars/guerilla7/CyberMoE?style=social)
@@ -27,7 +28,7 @@
 - [✅ To-Do](#to-do)
 
 ---
-🚀  This project provides a minimal, educational implementation of a sparse **Mixture-of-Experts (MoE)** model. It is designed to demonstrate the core concepts of MoE within a cybersecurity context, showing how different "expert" models can be used to classify security-related text.
+🚀  This project provides a minimal, educational implementation of a sparse **Mixture-of-Experts (MoE)** model. It is designed to demonstrate the core concepts of MoE within a cybersecurity cont[...]  
 
 🗺️  This repository contains two main components:
 1.  A command-line script (`CyberMoe.py`) that trains the model and runs inference on a predefined set of examples.
@@ -71,7 +72,7 @@ This script is a hands-on demonstration of a modern MoE architecture:
 1.  **Shared Encoder**: A single `distilbert-base-uncased` model from HuggingFace processes the input text into numerical representations.
 2.  **Specialized Experts**: Five simple neural networks act as classifiers for five distinct (simulated) domains: "Network", "Malware", "Phishing", "Cloud Security", and "Web App Security".
 3.  **Gating Network**: A small network that analyzes the encoded text and assigns a relevance score to each expert.
-4.  **Sparse Routing (Top-K)**: To demonstrate efficiency, the model only **activates the Top-K (K=2)** most relevant experts for any given input. The output of the non-selected expert is skipped entirely, saving computation.
+4.  **Sparse Routing (Top-K)**: To demonstrate efficiency, the model only **activates the Top-K (K=2)** most relevant experts for any given input. The output of the non-selected expert is skipped [...]
 
 </details>
 
@@ -80,8 +81,8 @@ This script is a hands-on demonstration of a modern MoE architecture:
 
 The script's main function, `train_demo()`, performs two phases:
 
-1.  **Synthetic Training**: First, it trains the MoE model on a "themed" synthetic dataset. It generates sentences with specific keywords (e.g., "IP address," "malware," "email") to teach the gating network how to route different types of inputs to the correct expert.
-2.  **Inference**: After the brief training phase, it runs inference on a sample of five security-themed sentences. The output clearly shows the model's final prediction, the gating network's routing decisions, and which experts were sparsely activated.
+1.  **Synthetic Training**: First, it trains the MoE model on a "themed" synthetic dataset. It generates sentences with specific keywords (e.g., "IP address," "malware," "email") to teach the gati[...]  
+2.  **Inference**: After the brief training phase, it runs inference on a sample of five security-themed sentences. The output clearly shows the model's final prediction, the gating network's rout[...]  
 
 </details>
 
@@ -109,7 +110,7 @@ This project comes with two ways to run the model:
 
 ### 1. Interactive Web Demo (Recommended)
 
-For the best experience, run the interactive Streamlit demo. This will launch a web page that allows you to input your own text and see the model's analysis in real-time. After entering a sentence, click the "Analyze" button.
+For the best experience, run the interactive Streamlit demo. This will launch a web page that allows you to input your own text and see the model's analysis in real-time. After entering a sentenc[...]  
 
 ```bash
 streamlit run app.py
@@ -165,7 +166,7 @@ After running the `CyberMoe.py` script, you will see the training progress follo
 - **`Top-2 experts`**: The experts that were selected for activation based on the gating scores.
 - **`Expert Logits (shows sparse activation)`**: This is the most important part for understanding the MoE's efficiency.
     - `ACTIVATED`: The model computed the output for the "Network" and "Phishing" experts. You can see their raw output scores (logits).
-    - `SKIPPED`: The "Malware" expert was deemed irrelevant by the gating network, so its logits are `[0. 0.]`, meaning it was **not computed**. This demonstrates the computational savings of sparse MoE models.
+    - `SKIPPED`: The "Malware" expert was deemed irrelevant by the gating network, so its logits are `[0. 0.]`, meaning it was **not computed**. This demonstrates the computational savings of spa[...]  
 
 </details>
 
@@ -221,14 +222,14 @@ The app supports multiple themes:
 - Dark mode (optimized for readability)
 - System preference (follows OS settings)
 
-Change the theme using the "💫 Appearance" section in the sidebar. All visualizations and components are theme-aware and will update automatically. See `THEME_GUIDE.md` for more details on theming support.
+Change the theme using the "💫 Appearance" section in the sidebar. All visualizations and components are theme-aware and will update automatically. See `THEME_GUIDE.md` for more details on them[...]  
 
 </details>
 
 <details>
 <summary>📦 Large Files and Git LFS</summary>
 
-This repo uses Git LFS to store large artifacts like model checkpoints and some datasets. The patterns are configured in `.gitattributes` (e.g., `checkpoints/**`, `data/**`, `*.pt`, `*.csv`, `*.jsonl`). Collaborators should set up Git LFS locally to avoid pointer files and 100MB push limits on GitHub.
+This repo uses Git LFS to store large artifacts like model checkpoints and some datasets. The patterns are configured in `.gitattributes` (e.g., `checkpoints/**`, `data/**`, `*.pt`, `*.csv`, `*.j[...]  
 
 Quick start for collaborators:
 
@@ -251,7 +252,6 @@ Pushing large files:
   Coordinate with your team before rewriting history.
 
 Tips:
-
 - In CI or constrained environments, you can skip automatic LFS downloads by setting `GIT_LFS_SKIP_SMUDGE=1` and later fetch with `git lfs pull` when needed.
 - Ensure new large file types are added to `.gitattributes` if they fall outside existing patterns.
 
@@ -270,8 +270,7 @@ Tips:
     - If you just pulled from Git, ensure LFS pulled the binary instead of a pointer file: `git lfs pull`.
 
 - Feedback upload fails schema check
-    - The uploader expects line-delimited JSON (JSONL). Each line should be a JSON object with at least `user_input` (string) and `user_feedback` (boolean). Optional fields like `pred_label`/`correction` must be "Benign" or "Malicious" (or obvious equivalents like true/false/1/0).
-    - Replace mode is destructive and requires the confirmation checkbox.
+    - The uploader expects line-delimited JSON (JSONL). Each line should be a JSON object with at least `user_input` (string) and `user_feedback` (boolean). Optional fields like `pred_label`/`cor[...] 
 
 - Graphviz diagram not rendering
     - The app uses `st.graphviz_chart`. The Python `graphviz` package is included, but some systems also need the Graphviz system binary.
@@ -285,10 +284,7 @@ Tips:
     - Make sure your PyTorch wheel matches your CUDA version and drivers. See SETUP_GUIDE for CUDA install and verification (`torch.cuda.is_available()`).
 
 - PyTorch 2.6 checkpoint loading errors
-    - If you see errors like `TypeError: load() got an unexpected keyword argument 'weights_only'` or unpickling errors when loading checkpoints, it's due to PyTorch 2.6+ changing the default behavior of `torch.load()`. 
-    - Our code includes a compatibility fix that works with both older and newer PyTorch versions.
-    - The Docker container uses PyTorch 2.0.1 to avoid these issues entirely.
-    - You can find available CUDA tags at [Docker Hub](https://hub.docker.com/r/nvidia/cuda/tags).
+    - If you see errors like `TypeError: load() got an unexpected keyword argument 'weights_only'` or unpickling errors when loading checkpoints, it's due to PyTorch 2.6+ changing the default beh[...] 
 
 - Streamlit port already in use
     - Run on a different port: `streamlit run app.py --server.port=8502`
