@@ -28,7 +28,7 @@
 - [✅ To-Do](#to-do)
 
 ---
-🚀  This project provides a minimal, educational implementation of a sparse **Mixture-of-Experts (MoE)** model. It is designed to demonstrate the core concepts of MoE within a cybersecurity cont[...]  
+🚀  This project provides a minimal, educational implementation of a sparse **Mixture-of-Experts (MoE)** model. It is designed to demonstrate the core concepts of MoE within a cybersecurity context.  
 
 🗺️  This repository contains two main components:
 1.  A command-line script (`CyberMoe.py`) that trains the model and runs inference on a predefined set of examples.
