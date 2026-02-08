@@ -31,6 +31,11 @@ RUN pip3 install --no-cache-dir \
 # Copy application code
 COPY . .
 
+# Security fix: run as non-root user
+RUN useradd -m -s /bin/bash appuser && \
+    chown -R appuser:appuser /app
+USER appuser
+
 # Set up environment
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1

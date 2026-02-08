@@ -188,6 +188,7 @@ class CyberMoE(nn.Module):
                  pretrain_lr: float = 1e-4,
                  pretrain_batch_size: int = 32):
         super().__init__()
+        self.num_experts = num_experts
         self.top_k = top_k
         
         # Pre-training configuration

@@ -110,13 +110,10 @@ def load_finetuned_model(device: str | torch.device = None):
         return None
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     
-    # Load with explicit weights_only=False for PyTorch 2.6+ compatibility
-    try:
-        # For PyTorch 2.6+, explicitly disable weights_only for compatibility with older checkpoints
-        ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
-    except TypeError:
-        # Fallback for older PyTorch versions where weights_only parameter doesn't exist
-        ckpt = torch.load(ckpt_path, map_location=device)
+    # Security fix: use weights_only=True to prevent arbitrary code execution
+    # via pickle deserialization. The checkpoint only contains safe types
+    # (dict, OrderedDict, str, int, Tensor) which are on PyTorch's allowlist.
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=True)
     
     top_k = int(ckpt.get("top_k", 2))
     model = CyberMoE(top_k=top_k).to(device)
